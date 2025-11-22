@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1763627875449,
+      "tag": "0000_spotty_wong",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1763628012289,
+      "tag": "0001_first_vision",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1763628330043,
+      "tag": "0002_public_silver_fox",
+      "breakpoints": true
+    }
+  ]
+}
