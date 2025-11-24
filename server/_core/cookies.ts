@@ -39,10 +39,13 @@ export function getSessionCookieOptions(
   //       ? hostname
   //       : undefined;
 
+  // In development, use "lax" sameSite for better compatibility with Vite proxy
+  const isDevelopment = process.env.NODE_ENV === "development";
+  
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "none",
+    sameSite: isDevelopment ? "lax" : "none",
     secure: isSecureRequest(req),
   };
 }

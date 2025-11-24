@@ -14,7 +14,8 @@ import * as demoAnalyticsDb from "./demo-analytics-db";
 import * as wikiDb from "./db/wiki";
 import { getDb } from "./db";
 import { calculateWeightedScore, determineLevel } from "./scoreCalculation";
-import { feedbacks, assessmentSessions, userAnswers, industries, positions, industryCompetencies, positionCompetencies, changelogs } from "../drizzle/schema";
+import { feedbacks, assessmentSessions, userAnswers, industries, positions, industryCompetencies, positionCompetencies, changelogs, users } from "../drizzle/schema";
+import bcrypt from "bcryptjs";
 
 export const appRouter = router({
   system: systemRouter,
@@ -27,6 +28,210 @@ export const appRouter = router({
         success: true,
       } as const;
     }),
+    // 本地用户名密码登录
+    localLogin: publicProcedure
+      .input(z.object({
+        username: z.string().min(1),
+        password: z.string().min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const database = await getDb();
+        
+        // 查找用户
+        const [user] = await database
+          .select()
+          .from(users)
+          .where(eq(users.username, input.username))
+          .limit(1);
+        
+        if (!user || !user.passwordHash) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: '用户名或密码错误',
+          });
+        }
+        
+        // 验证密码
+        const isValid = await bcrypt.compare(input.password, user.passwordHash);
+        if (!isValid) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: '用户名或密码错误',
+          });
+        }
+        
+        // 更新最后登录时间
+        await database
+          .update(users)
+          .set({ lastSignedIn: new Date() })
+          .where(eq(users.id, user.id));
+        
+        // 创建session - 使用openId（本地用户在数据库中已设置openId）
+        if (!user.openId) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: '用户数据错误：缺少openId',
+          });
+        }
+        
+        const sessionToken = await sdk.createSessionToken(user.openId, {
+          name: user.name || user.username || '',
+        });
+        
+        // 设置cookie
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, {
+          ...cookieOptions,
+          maxAge: ONE_YEAR_MS,
+        });
+        
+        return {
+          success: true,
+          user: {
+            id: user.id,
+            username: user.username,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+          },
+        };
+      }),
+    // 修改密码
+    changePassword: protectedProcedure
+      .input(z.object({
+        currentPassword: z.string().min(1),
+        newPassword: z.string().min(6, '新密码至少6位'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const database = await getDb();
+        
+        // 获取当前用户
+        const [user] = await database
+          .select()
+          .from(users)
+          .where(eq(users.id, ctx.user.id))
+          .limit(1);
+        
+        if (!user || !user.passwordHash) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: '当前用户不支持密码登录',
+          });
+        }
+        
+        // 验证当前密码
+        const isValid = await bcrypt.compare(input.currentPassword, user.passwordHash);
+        if (!isValid) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: '当前密码错误',
+          });
+        }
+        
+        // 生成新密码哈希
+        const salt = await bcrypt.genSalt(10);
+        const newHash = await bcrypt.hash(input.newPassword, salt);
+        
+        // 更新密码
+        await database
+          .update(users)
+          .set({ 
+            passwordHash: newHash,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, ctx.user.id));
+        
+        return {
+          success: true,
+          message: '密码修改成功',
+        };
+      }),
+    // 用户注册
+    register: publicProcedure
+      .input(z.object({
+        username: z.string().min(3, '用户名至少3位').max(20, '用户名最多20位').regex(/^[a-zA-Z0-9_]+$/, '用户名只能包含字母、数字和下划线'),
+        password: z.string().min(6, '密码至少6位'),
+        email: z.string().email('请输入有效的邮箱地址').optional(),
+        name: z.string().min(1, '请输入姓名').optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const database = await getDb();
+        
+        // 检查用户名是否已存在
+        const [existingUser] = await database
+          .select()
+          .from(users)
+          .where(eq(users.username, input.username))
+          .limit(1);
+        
+        if (existingUser) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: '用户名已存在，请选择其他用户名',
+          });
+        }
+        
+        // 如果提供了邮箱，检查邮箱是否已存在
+        if (input.email) {
+          const [existingEmail] = await database
+            .select()
+            .from(users)
+            .where(eq(users.email, input.email))
+            .limit(1);
+          
+          if (existingEmail) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: '该邮箱已被注册',
+            });
+          }
+        }
+        
+        // 生成密码哈希
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(input.password, salt);
+        
+        // 生成openId（本地用户使用 local_ 前缀）
+        const openId = `local_${input.username}`;
+        
+        // 创建用户
+        const [newUser] = await database
+          .insert(users)
+          .values({
+            username: input.username,
+            passwordHash,
+            openId,
+            name: input.name || input.username,
+            email: input.email,
+            loginMethod: 'local',
+            role: 'user', // 默认角色为普通用户
+          })
+          .$returningId();
+        
+        // 创建session
+        const sessionToken = await sdk.createSessionToken(openId, {
+          name: input.name || input.username,
+        });
+        
+        // 设置cookie
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, {
+          ...cookieOptions,
+          maxAge: ONE_YEAR_MS,
+        });
+        
+        return {
+          success: true,
+          message: '注册成功',
+          user: {
+            id: newUser.id,
+            username: input.username,
+            name: input.name || input.username,
+            email: input.email,
+            role: 'user',
+          },
+        };
+      }),
   }),
 
   // ==================== Scenarios (问题/场景) ====================
@@ -175,152 +380,175 @@ ${competenciesContext}
       return await db.getAllCompetencies();
     }),
 
-    // 根据用户画像推荐专项能力
+    // 根据用户画像推荐专项能力（三层模型：通用+行业+岗位）
     getRecommended: protectedProcedure.query(async ({ ctx }) => {
+      const database = await getDb();
+      if (!database) return [];
+
       const userProfile = await db.getUserProfile(ctx.user.id);
-      const allCompetencies = await db.getAllCompetencies();
-      const userCompetencies = await db.getUserCompetencies(ctx.user.id);
-      
       if (!userProfile) {
         return [];
       }
 
-      // 计算用户的能力短板（得分低于60分的能力）
-      const weakCompetencies = userCompetencies
-        .filter(uc => uc.score < 60)
-        .map(uc => uc.competencyId);
+      const allCompetencies = await db.getAllCompetencies();
+      const userCompetencies = await db.getUserCompetencies(ctx.user.id);
       
-      // 计算8个维度的平均得分
-      const categoryScores: Record<string, { total: number, count: number }> = {};
+      // 创建用户能力分数映射
+      const userScoreMap = new Map<number, number>();
       userCompetencies.forEach(uc => {
-        const comp = allCompetencies.find(c => c.id === uc.competencyId);
-        if (comp) {
-          if (!categoryScores[comp.category]) {
-            categoryScores[comp.category] = { total: 0, count: 0 };
-          }
-          categoryScores[comp.category].total += uc.score;
-          categoryScores[comp.category].count += 1;
-        }
+        userScoreMap.set(uc.competencyId, uc.finalScore);
       });
-      
-      // 找出得分最低的2个维度
-      const weakCategories = Object.entries(categoryScores)
-        .map(([category, data]) => ({
-          category,
-          avgScore: data.total / data.count
-        }))
-        .sort((a, b) => a.avgScore - b.avgScore)
-        .slice(0, 2)
-        .map(item => item.category);
 
-      // 根据行业、岗位、能力短板推荐能力
-      const recommendations: Array<{competency: any, reason: string, priority: number}> = [];
-      
-      // 技术类岗位推荐
-      if (userProfile.currentRole?.match(/CTO|CIO|技术|研发|R&D|Tech/i)) {
-        const techCompetencies = allCompetencies.filter(c => 
-          c.name.match(/技术|产品|创新/)
-        );
-        techCompetencies.forEach(c => {
-          recommendations.push({
-            competency: c,
-            reason: '技术管理者需要平衡技术深度与管理广度，该能力对您的岗位至关重要',
-            priority: 5
-          });
-        });
-      }
-      
-      // 产品类岗位推荐
-      if (userProfile.currentRole?.match(/CPO|产品|Product/i)) {
-        const productCompetencies = allCompetencies.filter(c => 
-          c.name.match(/产品|用户|需求|创新/)
-        );
-        productCompetencies.forEach(c => {
-          recommendations.push({
-            competency: c,
-            reason: '产品管理需要深入理解用户需求并平衡各方利益，该能力是产品成功的关键',
-            priority: 5
-          });
-        });
-      }
-      
-      // 运营类岗位推荐
-      if (userProfile.currentRole?.match(/COO|运营|Operations/i)) {
-        const opsCompetencies = allCompetencies.filter(c => 
-          c.name.match(/执行|流程|资源|协调/)
-        );
-        opsCompetencies.forEach(c => {
-          recommendations.push({
-            competency: c,
-            reason: '运营管理需要高效的执行力和资源协调能力，该能力能提升运营效率',
-            priority: 5
-          });
-        });
-      }
-      
-      // 初创公司阶段推荐
-      if (userProfile.companyStage === 'seed' || userProfile.companyStage === 'angel') {
-        const startupCompetencies = allCompetencies.filter(c => 
-          c.name.match(/创新|执行|资源|目标/)
-        );
-        startupCompetencies.forEach(c => {
-          if (!recommendations.find(r => r.competency.id === c.id)) {
-            recommendations.push({
-              competency: c,
-              reason: '初创阶段需要快速执行和灵活调整，该能力对初创企业特别重要',
-              priority: 4
-            });
-          }
-        });
-      }
-      
-      // 成熟公司阶段推荐
-      if (userProfile.companyStage === 'mature') {
-        const matureCompetencies = allCompetencies.filter(c => 
-          c.name.match(/战略|文化|组织|体系/)
-        );
-        matureCompetencies.forEach(c => {
-          if (!recommendations.find(r => r.competency.id === c.id)) {
-            recommendations.push({
-              competency: c,
-              reason: '成熟企业需要系统化的管理和持续创新，该能力能帮助组织保持竞争力',
-              priority: 4
-            });
-          }
-        });
-      }
-      
-      // 添加短板能力推荐（最高优先级）
-      weakCompetencies.forEach(compId => {
-        const comp = allCompetencies.find(c => c.id === compId);
-        if (comp && !recommendations.find(r => r.competency.id === compId)) {
+      const recommendations: Array<{
+        competency: any;
+        reason: string;
+        priority: number;
+        source: 'universal' | 'industry' | 'position' | 'gap';
+        currentScore?: number;
+        targetScore?: number;
+        gap?: number;
+      }> = [];
+
+      // === 第一层：通用能力（所有创业者必备）===
+      const coreCompetencies = allCompetencies.filter(c => c.isCore);
+      coreCompetencies.forEach(comp => {
+        const currentScore = userScoreMap.get(comp.id) || 0;
+        const gap = 80 - currentScore; // 通用能力目标80分
+        
+        if (gap > 20) { // 只推荐差距大于20分的
           recommendations.push({
             competency: comp,
-            reason: `该能力是您当前的短板（得分<60），优先提升可以快速提高整体管理水平`,
-            priority: 10 // 最高优先级
+            reason: `通用核心能力，所有创业者必备，当前得分${currentScore}，建议提升至80分`,
+            priority: 10 - Math.floor(gap / 10), // 差距越大优先级越高
+            source: 'universal',
+            currentScore,
+            targetScore: 80,
+            gap
           });
         }
       });
-      
-      // 添加弱势维度的能力推荐
-      weakCategories.forEach(category => {
-        const categoryComps = allCompetencies.filter(c => 
-          c.category === category && 
-          !recommendations.find(r => r.competency.id === c.id)
-        );
-        categoryComps.slice(0, 2).forEach(comp => {
+
+      // === 第二层：行业特定能力 ===
+      if (userProfile.industry) {
+        // 查找行业ID
+        const [industryRecord] = await database
+          .select()
+          .from(industries)
+          .where(eq(industries.name, userProfile.industry))
+          .limit(1);
+
+        if (industryRecord) {
+          // 获取该行业的关键能力
+          const industryCompetencyRelations = await database
+            .select()
+            .from(industryCompetencies)
+            .where(eq(industryCompetencies.industryId, industryRecord.id));
+
+          for (const rel of industryCompetencyRelations) {
+            const comp = allCompetencies.find(c => c.id === rel.competencyId);
+            if (!comp) continue;
+
+            const currentScore = userScoreMap.get(comp.id) || 0;
+            const targetScore = rel.importance * 20; // importance 1-5 对应 20-100分
+            const gap = targetScore - currentScore;
+
+            if (gap > 15 && !recommendations.find(r => r.competency.id === comp.id)) {
+              recommendations.push({
+                competency: comp,
+                reason: `${userProfile.industry}行业关键能力（重要性${rel.importance}/5）：${rel.description}`,
+                priority: 8 + rel.importance, // 7-13之间
+                source: 'industry',
+                currentScore,
+                targetScore,
+                gap
+              });
+            }
+          }
+        }
+      }
+
+      // === 第三层：岗位特定能力 ===
+      if (userProfile.currentRole) {
+        // 查找匹配的岗位
+        const [positionRecord] = await database
+          .select()
+          .from(positions)
+          .where(eq(positions.name, userProfile.currentRole))
+          .limit(1);
+
+        if (positionRecord) {
+          // 获取该岗位的关键能力
+          const positionCompetencyRelations = await database
+            .select()
+            .from(positionCompetencies)
+            .where(eq(positionCompetencies.positionId, positionRecord.id));
+
+          for (const rel of positionCompetencyRelations) {
+            const comp = allCompetencies.find(c => c.id === rel.competencyId);
+            if (!comp) continue;
+
+            const currentScore = userScoreMap.get(comp.id) || 0;
+            const targetScore = rel.requiredLevel * 20; // requiredLevel 1-5 对应 20-100分
+            const gap = targetScore - currentScore;
+
+            if (gap > 15) {
+              // 如果已经在推荐列表中（来自行业或通用），提高优先级
+              const existing = recommendations.find(r => r.competency.id === comp.id);
+              if (existing) {
+                existing.priority += 3; // 提高优先级
+                existing.reason += ` | 同时是${userProfile.currentRole}岗位核心能力（要求等级${rel.requiredLevel}/5）`;
+              } else {
+                recommendations.push({
+                  competency: comp,
+                  reason: `${userProfile.currentRole}岗位核心能力（要求等级${rel.requiredLevel}/5，重要性${rel.importance}/5）：${rel.description}`,
+                  priority: 6 + rel.importance, // 7-11之间
+                  source: 'position',
+                  currentScore,
+                  targetScore,
+                  gap
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // === 第四层：短板能力（得分<60）===
+      const gapCompetencies = userCompetencies.filter(uc => uc.finalScore < 60);
+      gapCompetencies.forEach(uc => {
+        const comp = allCompetencies.find(c => c.id === uc.competencyId);
+        if (!comp) return;
+
+        const existing = recommendations.find(r => r.competency.id === comp.id);
+        if (existing) {
+          existing.priority += 5; // 短板额外提高优先级
+          existing.reason = `【能力短板】${existing.reason}`;
+        } else {
           recommendations.push({
             competency: comp,
-            reason: `您在「${category}」维度的能力较弱，提升该能力可以平衡发展`,
-            priority: 8
+            reason: `能力短板（当前${uc.finalScore}分<60分），急需提升`,
+            priority: 15, // 最高优先级
+            source: 'gap',
+            currentScore: uc.finalScore,
+            targetScore: 70,
+            gap: 70 - uc.finalScore
           });
-        });
+        }
       });
-      
-      // 按优先级排序并去重
-      return recommendations
+
+      // 按优先级排序，去重，返回前10个
+      const uniqueRecommendations = recommendations
+        .reduce((acc, curr) => {
+          const existing = acc.find(r => r.competency.id === curr.competency.id);
+          if (!existing) {
+            acc.push(curr);
+          }
+          return acc;
+        }, [] as typeof recommendations)
         .sort((a, b) => b.priority - a.priority)
-        .slice(0, 5); // 最多返回5个推荐
+        .slice(0, 10);
+
+      return uniqueRecommendations;
     }),
 
     // AI生成能力提升建议
@@ -655,6 +883,212 @@ ${biases.slice(0, 3).map(b => `- ${b.competency?.name}：${b.bias > 0 ? '自评�
         role: userProfile?.currentRole || "未设置",
       };
     }),
+
+    // 增强的差距分析（基于三层模型）
+    getGapAnalysis: protectedProcedure.query(async ({ ctx }) => {
+      const database = await getDb();
+      if (!database) return null;
+
+      const userProfile = await db.getUserProfile(ctx.user.id);
+      if (!userProfile) {
+        return null;
+      }
+
+      const allCompetencies = await db.getAllCompetencies();
+      const userCompetencies = await db.getUserCompetencies(ctx.user.id);
+      const domains = await db.getAllDomains();
+
+      // 用户能力分数映射
+      const userScoreMap = new Map<number, number>();
+      userCompetencies.forEach(uc => {
+        userScoreMap.set(uc.competencyId, uc.finalScore);
+      });
+
+      interface GapItem {
+        competency: any;
+        currentScore: number;
+        targetScore: number;
+        gap: number;
+        priority: number;
+        reason: string;
+        source: 'universal' | 'industry' | 'position';
+        domain: string;
+      }
+
+      const gaps: GapItem[] = [];
+
+      // === 1. 通用能力差距 ===
+      const coreCompetencies = allCompetencies.filter(c => c.isCore);
+      coreCompetencies.forEach(comp => {
+        const currentScore = userScoreMap.get(comp.id) || 0;
+        const targetScore = 80; // 通用能力目标
+        const gap = targetScore - currentScore;
+
+        if (gap > 0) {
+          const domain = domains.find(d => d.id === comp.domainId);
+          gaps.push({
+            competency: comp,
+            currentScore,
+            targetScore,
+            gap,
+            priority: gap > 30 ? 10 : gap > 20 ? 8 : 6,
+            reason: '通用核心能力，所有创业者必备',
+            source: 'universal',
+            domain: domain?.name || '未知域'
+          });
+        }
+      });
+
+      // === 2. 行业能力差距 ===
+      if (userProfile.industry) {
+        const [industryRecord] = await database
+          .select()
+          .from(industries)
+          .where(eq(industries.name, userProfile.industry))
+          .limit(1);
+
+        if (industryRecord) {
+          const industryCompetencyRelations = await database
+            .select()
+            .from(industryCompetencies)
+            .where(eq(industryCompetencies.industryId, industryRecord.id));
+
+          for (const rel of industryCompetencyRelations) {
+            const comp = allCompetencies.find(c => c.id === rel.competencyId);
+            if (!comp) continue;
+
+            const currentScore = userScoreMap.get(comp.id) || 0;
+            const targetScore = rel.importance * 20;
+            const gap = targetScore - currentScore;
+
+            if (gap > 0) {
+              const existing = gaps.find(g => g.competency.id === comp.id);
+              const domain = domains.find(d => d.id === comp.domainId);
+
+              if (existing) {
+                // 更新目标分数为更高值
+                if (targetScore > existing.targetScore) {
+                  existing.targetScore = targetScore;
+                  existing.gap = targetScore - currentScore;
+                }
+                existing.priority += rel.importance;
+                existing.reason += ` | ${userProfile.industry}行业关键能力`;
+              } else {
+                gaps.push({
+                  competency: comp,
+                  currentScore,
+                  targetScore,
+                  gap,
+                  priority: 7 + rel.importance,
+                  reason: `${userProfile.industry}行业关键能力（重要性${rel.importance}/5）`,
+                  source: 'industry',
+                  domain: domain?.name || '未知域'
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // === 3. 岗位能力差距 ===
+      if (userProfile.currentRole) {
+        const [positionRecord] = await database
+          .select()
+          .from(positions)
+          .where(eq(positions.name, userProfile.currentRole))
+          .limit(1);
+
+        if (positionRecord) {
+          const positionCompetencyRelations = await database
+            .select()
+            .from(positionCompetencies)
+            .where(eq(positionCompetencies.positionId, positionRecord.id));
+
+          for (const rel of positionCompetencyRelations) {
+            const comp = allCompetencies.find(c => c.id === rel.competencyId);
+            if (!comp) continue;
+
+            const currentScore = userScoreMap.get(comp.id) || 0;
+            const targetScore = rel.requiredLevel * 20;
+            const gap = targetScore - currentScore;
+
+            if (gap > 0) {
+              const existing = gaps.find(g => g.competency.id === comp.id);
+              const domain = domains.find(d => d.id === comp.domainId);
+
+              if (existing) {
+                if (targetScore > existing.targetScore) {
+                  existing.targetScore = targetScore;
+                  existing.gap = targetScore - currentScore;
+                }
+                existing.priority += rel.importance + 2;
+                existing.reason += ` | ${userProfile.currentRole}岗位核心能力`;
+              } else {
+                gaps.push({
+                  competency: comp,
+                  currentScore,
+                  targetScore,
+                  gap,
+                  priority: 6 + rel.importance,
+                  reason: `${userProfile.currentRole}岗位核心能力（要求等级${rel.requiredLevel}/5）`,
+                  source: 'position',
+                  domain: domain?.name || '未知域'
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // 按优先级和差距排序
+      gaps.sort((a, b) => {
+        if (b.priority !== a.priority) return b.priority - a.priority;
+        return b.gap - a.gap;
+      });
+
+      // 计算按域分组的统计
+      const domainStats = domains.map(domain => {
+        const domainGaps = gaps.filter(g => g.domain === domain.name);
+        const avgGap = domainGaps.length > 0
+          ? domainGaps.reduce((sum, g) => sum + g.gap, 0) / domainGaps.length
+          : 0;
+        const totalGap = domainGaps.reduce((sum, g) => sum + g.gap, 0);
+
+        return {
+          domain: domain.name,
+          gapCount: domainGaps.length,
+          avgGap: Math.round(avgGap),
+          totalGap: Math.round(totalGap),
+          priority: totalGap > 200 ? 'high' : totalGap > 100 ? 'medium' : 'low'
+        };
+      }).filter(s => s.gapCount > 0)
+        .sort((a, b) => b.totalGap - a.totalGap);
+
+      // 计算总体统计
+      const totalGaps = gaps.length;
+      const criticalGaps = gaps.filter(g => g.gap > 30).length;
+      const avgGap = gaps.length > 0
+        ? gaps.reduce((sum, g) => sum + g.gap, 0) / gaps.length
+        : 0;
+
+      return {
+        gaps: gaps.slice(0, 20), // 返回前20个差距最大的
+        domainStats,
+        summary: {
+          totalGaps,
+          criticalGaps, // 差距>30分
+          avgGap: Math.round(avgGap),
+          universalGaps: gaps.filter(g => g.source === 'universal').length,
+          industryGaps: gaps.filter(g => g.source === 'industry').length,
+          positionGaps: gaps.filter(g => g.source === 'position').length,
+        },
+        profile: {
+          industry: userProfile.industry,
+          role: userProfile.currentRole,
+          companyStage: userProfile.companyStage,
+        }
+      };
+    }),
   }),
 
   // ==================== Assessments (能力评估) ====================
@@ -876,7 +1310,8 @@ ${evidenceText}
   profile: router({
     // 获取当前用户画像
     get: protectedProcedure.query(async ({ ctx }) => {
-      return await db.getUserProfile(ctx.user.id);
+      const profile = await db.getUserProfile(ctx.user.id);
+      return profile ?? null;
     }),
 
     // 获取信息完善度
@@ -906,7 +1341,9 @@ ${evidenceText}
 
       for (const field of fields) {
         const value = profile[field.key as keyof typeof profile];
-        if (value === null || value === undefined || value === '' || value === 0) {
+        // For number fields, 0 is a valid value (e.g., 0 direct reports, 0 layers)
+        // Only check for null, undefined, or empty string
+        if (value === null || value === undefined || value === '') {
           missingFields.push(field.label);
         } else {
           filledCount++;
@@ -3947,7 +4384,7 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
           const userOpenId = account.username.startsWith('demo_') ? account.username : `demo_${account.username}`;
           const demoUser = await db.upsertUser({
             openId: userOpenId,
-            name: account.name,
+            name: account.displayName || account.username,
             email: `${account.username}@demo.local`,
             loginMethod: 'demo',
             role: 'user',
@@ -3982,9 +4419,10 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
         // 创建session token并设置cookie
         // account.username 已经包含 demo_ 前缀，不需要再次添加
         const openId = account.username.startsWith('demo_') ? account.username : `demo_${account.username}`;
-        console.log('[Demo Login] Creating session token:', { openId, username: account.username, name: account.name, expiresInMs: ONE_YEAR_MS });
+        const displayName = account.displayName || account.username;
+        console.log('[Demo Login] Creating session token:', { openId, username: account.username, displayName, expiresInMs: ONE_YEAR_MS });
         const sessionToken = await sdk.createSessionToken(openId, {
-          name: account.name,
+          name: displayName,
           expiresInMs: ONE_YEAR_MS,
         });
         
@@ -3995,8 +4433,351 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
           success: true,
           userId,
           username: account.username,
-          name: account.name,
+          name: displayName,
         };
+      }),
+  }),
+
+  // ==================== 企业能力评估 ====================
+  organizationAssessment: router({
+    // 获取企业能力评估
+    get: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await db.getOrganizationAssessment(ctx.user.id);
+      }),
+    
+    // 保存企业能力评估
+    save: protectedProcedure
+      .input(z.object({
+        companyId: z.number().optional(),
+        strategyScore: z.number().min(0).max(100),
+        operationScore: z.number().min(0).max(100),
+        organizationScore: z.number().min(0).max(100),
+        innovationScore: z.number().min(0).max(100),
+        detailedScores: z.string(), // JSON string with detailed scores
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const assessmentId = await db.saveOrganizationAssessment({
+          userId: ctx.user.id,
+          ...input,
+        });
+        
+        // Save to history
+        await db.saveOrganizationAssessmentHistory({
+          userId: ctx.user.id,
+          strategyScore: input.strategyScore,
+          operationScore: input.operationScore,
+          organizationScore: input.organizationScore,
+          innovationScore: input.innovationScore,
+        });
+        
+        return { success: true, assessmentId };
+      }),
+    
+    // 获取评估历史
+    getHistory: protectedProcedure
+      .input(z.object({
+        limit: z.number().default(10),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await db.getOrganizationAssessmentHistory(ctx.user.id, input.limit);
+      }),
+  }),
+
+  // ==================== 岗位与能力要求 ====================
+  positions: router({
+    // 获取所有岗位
+    getAll: publicProcedure
+      .query(async () => {
+        return await db.getAllPositions();
+      }),
+    
+    // 获取岗位详情
+    getById: publicProcedure
+      .input(z.object({
+        id: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getPositionById(input.id);
+      }),
+    
+    // 获取岗位能力要求
+    getCompetencies: publicProcedure
+      .input(z.object({
+        positionId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const positionComps = await db.getPositionCompetencies(input.positionId);
+        const allComps = await db.getAllCompetencies();
+        
+        return positionComps.map(pc => ({
+          ...pc,
+          competencyName: allComps.find(c => c.id === pc.competencyId)?.name || '',
+        }));
+      }),
+  }),
+
+  // ==================== 问卷题库 ====================
+  questions: router({
+    // 获取指定能力的题目
+    getByCompetency: protectedProcedure
+      .input(z.object({
+        competencyId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getQuestionsByCompetency(input.competencyId);
+      }),
+    
+    // 获取指定类型的题目
+    getByType: protectedProcedure
+      .input(z.object({
+        type: z.enum(["self_assessment", "scenario", "behavioral", "knowledge"]),
+        limit: z.number().default(10),
+      }))
+      .query(async ({ input }) => {
+        return await db.getQuestionsByType(input.type, input.limit);
+      }),
+    
+    // 获取所有题目（管理员）
+    getAll: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        }
+        return await db.getAllQuestions();
+      }),
+    
+    // 创建题目（管理员）
+    create: protectedProcedure
+      .input(z.object({
+        competencyId: z.number(),
+        question: z.string(),
+        questionType: z.enum(["self_assessment", "scenario", "behavioral", "knowledge"]),
+        option1: z.string(),
+        option2: z.string(),
+        option3: z.string(),
+        option4: z.string(),
+        option5: z.string(),
+        score1: z.number().default(20),
+        score2: z.number().default(40),
+        score3: z.number().default(60),
+        score4: z.number().default(80),
+        score5: z.number().default(100),
+        difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
+        targetLevel: z.number().default(3),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        }
+        const questionId = await db.createQuestion(input);
+        return { success: true, questionId };
+      }),
+    
+    // 更新题目（管理员）
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        data: z.object({
+          question: z.string().optional(),
+          option1: z.string().optional(),
+          option2: z.string().optional(),
+          option3: z.string().optional(),
+          option4: z.string().optional(),
+          option5: z.string().optional(),
+          difficulty: z.enum(["easy", "medium", "hard"]).optional(),
+          isActive: z.boolean().optional(),
+        }),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        }
+        await db.updateQuestion(input.id, input.data);
+        return { success: true };
+      }),
+    
+    // 删除题目（软删除，管理员）
+    delete: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        }
+        await db.deleteQuestion(input.id);
+        return { success: true };
+      }),
+    
+    // 获取题库统计信息
+    getStatistics: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        }
+        return await db.getQuestionStatistics();
+      }),
+  }),
+
+  // ==================== 学习路径 ====================
+  learningPaths: router({
+    // 获取用户的学习路径
+    getMy: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await db.getUserLearningPaths(ctx.user.id);
+      }),
+    
+    // 获取路径详情
+    getById: protectedProcedure
+      .input(z.object({
+        pathId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const path = await db.getLearningPathById(input.pathId);
+        if (!path || path.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "学习路径不存在" });
+        }
+        
+        const resources = await db.getLearningResourcesByPath(input.pathId);
+        const progress = await db.getAllLearningProgressForPath(ctx.user.id, input.pathId);
+        
+        return {
+          ...path,
+          resources,
+          progress,
+        };
+      }),
+    
+    // 基于缺口生成学习路径
+    generateFromGaps: protectedProcedure
+      .input(z.object({
+        competencyIds: z.array(z.number()),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const pathId = await db.generateLearningPathFromGaps(ctx.user.id, input.competencyIds);
+        if (!pathId) {
+          throw new TRPCError({ 
+            code: "INTERNAL_SERVER_ERROR", 
+            message: "无法生成学习路径，可能是没有相关学习资源" 
+          });
+        }
+        return { success: true, pathId };
+      }),
+    
+    // 更新学习进度
+    updateProgress: protectedProcedure
+      .input(z.object({
+        pathId: z.number(),
+        resourceId: z.number(),
+        status: z.enum(["not_started", "in_progress", "completed"]),
+        progressPercent: z.number().min(0).max(100).optional(),
+        timeSpent: z.number().optional(),
+        notes: z.string().optional(),
+        rating: z.number().min(1).max(5).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const progressData: any = {
+          userId: ctx.user.id,
+          pathId: input.pathId,
+          resourceId: input.resourceId,
+          status: input.status,
+        };
+        
+        if (input.progressPercent !== undefined) progressData.progressPercent = input.progressPercent;
+        if (input.timeSpent !== undefined) progressData.timeSpent = input.timeSpent;
+        if (input.notes !== undefined) progressData.notes = input.notes;
+        if (input.rating !== undefined) progressData.rating = input.rating;
+        
+        if (input.status === 'in_progress' && !progressData.startedAt) {
+          progressData.startedAt = new Date();
+        }
+        if (input.status === 'completed') {
+          progressData.completedAt = new Date();
+          progressData.progressPercent = 100;
+        }
+        
+        await db.updateLearningProgress(progressData);
+        
+        // Update path progress
+        const allProgress = await db.getAllLearningProgressForPath(ctx.user.id, input.pathId);
+        const completedCount = allProgress.filter(p => p.status === 'completed').length;
+        const path = await db.getLearningPathById(input.pathId);
+        
+        if (path) {
+          await db.updateLearningPath(input.pathId, {
+            completedResources: completedCount,
+          });
+          
+          if (completedCount === path.totalResources && path.status !== 'completed') {
+            await db.updateLearningPath(input.pathId, {
+              status: 'completed',
+              completedAt: new Date(),
+            });
+          }
+        }
+        
+        return { success: true };
+      }),
+    
+    // 获取学习资源
+    getResources: protectedProcedure
+      .input(z.object({
+        competencyId: z.number().optional(),
+        type: z.enum(["article", "video", "book", "course"]).optional(),
+        difficulty: z.enum(["beginner", "intermediate", "advanced"]).optional(),
+      }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return [];
+        
+        let query = db.select().from(learningResources);
+        
+        if (input.competencyId) {
+          query = query.where(eq(learningResources.competencyId, input.competencyId)) as any;
+        }
+        
+        return await query;
+      }),
+  }),
+
+  // ==================== 管理员功能 ====================
+  admin: router({
+    // 手动触发能力快照
+    triggerSnapshot: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        // Check if user is admin
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({ 
+            code: "FORBIDDEN", 
+            message: "Only administrators can trigger snapshots" 
+          });
+        }
+        
+        const { manualSnapshotTrigger } = await import("./cronJobs");
+        const result = await manualSnapshotTrigger();
+        
+        return result;
+      }),
+    
+    // 获取系统统计信息
+    getStats: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        }
+        
+        return await db.getAdminStats();
+      }),
+    
+    // 获取所有用户
+    getAllUsers: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+        }
+        
+        return await db.getAllUsersWithStats();
       }),
   }),
 

@@ -21,15 +21,23 @@ import {
 } from "@/components/ui/sidebar";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, User, BarChart3, ClipboardList, Target, TrendingUp, BookOpen, Building2, GitCompare, GraduationCap } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Page 1", path: "/" },
-  { icon: Users, label: "Page 2", path: "/some-path" },
+  { icon: LayoutDashboard, label: "首页", path: "/dashboard" },
+  { icon: User, label: "用户画像", path: "/profile" },
+  { icon: BarChart3, label: "能力看板", path: "/competencies" },
+  { icon: ClipboardList, label: "能力评估", path: "/assessment" },
+  { icon: GitCompare, label: "缺口分析", path: "/gap-analysis" },
+  { icon: GraduationCap, label: "学习路径", path: "/learning-path" },
+  { icon: Building2, label: "企业能力", path: "/company" },
+  { icon: Target, label: "今日挑战", path: "/challenge" },
+  { icon: TrendingUp, label: "综合分析", path: "/analysis" },
+  { icon: BookOpen, label: "成长历程", path: "/growth" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -228,6 +236,28 @@ function DashboardLayoutContent({
                 );
               })}
             </SidebarMenu>
+            
+            {/* Admin Menu - Only visible for admins */}
+            {user?.role === 'admin' && (
+              <>
+                <div className="px-4 py-2 text-xs font-semibold text-muted-foreground">
+                  管理员
+                </div>
+                <SidebarMenu className="px-2 py-1">
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={location === '/admin'}
+                      onClick={() => setLocation('/admin')}
+                      tooltip="管理后台"
+                      className="h-10 transition-all font-normal"
+                    >
+                      <User className="h-4 w-4" />
+                      <span>管理后台</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </>
+            )}
           </SidebarContent>
 
           <SidebarFooter className="p-3">

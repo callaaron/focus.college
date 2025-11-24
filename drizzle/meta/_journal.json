@@ -22,6 +22,41 @@
       "when": 1763628330043,
       "tag": "0002_public_silver_fox",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1763818743567,
+      "tag": "0003_blushing_black_panther",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1763829603321,
+      "tag": "0004_whole_madame_masque",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1763830629710,
+      "tag": "0005_freezing_exiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1763830879703,
+      "tag": "0006_safe_ironclad",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1763834346428,
+      "tag": "0007_gorgeous_the_executioner",
+      "breakpoints": true
     }
   ]
 }

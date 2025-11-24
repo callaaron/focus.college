@@ -12,7 +12,11 @@ export const users = mysqlTable("users", {
    */
   id: int("id").autoincrement().primaryKey(),
   /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+  openId: varchar("openId", { length: 64 }).unique(),
+  /** Username for local authentication (optional, only for non-OAuth users) */
+  username: varchar("username", { length: 64 }).unique(),
+  /** Password hash for local authentication (optional, only for non-OAuth users) */
+  passwordHash: varchar("passwordHash", { length: 255 }),
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
@@ -148,6 +152,39 @@ export const scenarios = mysqlTable("scenarios", {
 export type Scenario = typeof scenarios.$inferSelect;
 export type InsertScenario = typeof scenarios.$inferInsert;
 
+// 问卷题库表
+export const assessmentQuestions = mysqlTable("assessmentQuestions", {
+  id: int("id").autoincrement().primaryKey(),
+  competencyId: int("competencyId").notNull(), // 关联能力
+  question: text("question").notNull(), // 题目内容
+  questionType: mysqlEnum("questionType", ["self_assessment", "scenario", "behavioral", "knowledge"]).default("self_assessment").notNull(), // 题目类型
+  // 选项和评分标准
+  option1: text("option1").notNull(), // 选项1（最低水平）
+  option2: text("option2").notNull(), // 选项2
+  option3: text("option3").notNull(), // 选项3（中等水平）
+  option4: text("option4").notNull(), // 选项4
+  option5: text("option5").notNull(), // 选项5（最高水平）
+  // 评分映射（选择选项X得多少分）
+  score1: int("score1").default(20), // 选项1得分
+  score2: int("score2").default(40), // 选项2得分
+  score3: int("score3").default(60), // 选项3得分
+  score4: int("score4").default(80), // 选项4得分
+  score5: int("score5").default(100), // 选项5得分
+  // 难度和使用统计
+  difficulty: mysqlEnum("difficulty", ["easy", "medium", "hard"]).default("medium"), // 题目难度
+  targetLevel: int("targetLevel").default(3), // 目标等级（1-5）
+  usageCount: int("usageCount").default(0), // 使用次数
+  correctRate: int("correctRate").default(50), // 正确率（0-100）
+  // 元数据
+  isActive: boolean("isActive").default(true).notNull(), // 是否启用
+  sortOrder: int("sortOrder").default(0), // 排序
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AssessmentQuestion = typeof assessmentQuestions.$inferSelect;
+export type InsertAssessmentQuestion = typeof assessmentQuestions.$inferInsert;
+
 // 答题会话表
 export const assessmentSessions = mysqlTable("assessmentSessions", {
   id: int("id").autoincrement().primaryKey(),
@@ -249,6 +286,77 @@ export const learningResources = mysqlTable("learningResources", {
 
 export type LearningResource = typeof learningResources.$inferSelect;
 export type InsertLearningResource = typeof learningResources.$inferInsert;
+
+// 学习路径表
+export const learningPaths = mysqlTable("learningPaths", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(), // 用户ID
+  title: varchar("title", { length: 255 }).notNull(), // 路径标题
+  description: text("description"), // 路径描述
+  targetCompetencies: text("targetCompetencies").notNull(), // 目标能力（JSON数组）
+  resourceIds: text("resourceIds").notNull(), // 资源ID列表（JSON数组）
+  totalResources: int("totalResources").default(0), // 总资源数
+  completedResources: int("completedResources").default(0), // 已完成资源数
+  estimatedDays: int("estimatedDays").default(30), // 预计完成天数
+  status: mysqlEnum("status", ["active", "completed", "paused"]).default("active").notNull(),
+  startedAt: timestamp("startedAt"),
+  completedAt: timestamp("completedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type LearningPath = typeof learningPaths.$inferSelect;
+export type InsertLearningPath = typeof learningPaths.$inferInsert;
+
+// 用户学习进度表
+export const userLearningProgress = mysqlTable("userLearningProgress", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  pathId: int("pathId").notNull(), // 关联学习路径
+  resourceId: int("resourceId").notNull(), // 关联学习资源
+  status: mysqlEnum("status", ["not_started", "in_progress", "completed"]).default("not_started").notNull(),
+  progressPercent: int("progressPercent").default(0), // 进度百分比
+  timeSpent: int("timeSpent").default(0), // 已花费时间（分钟）
+  notes: text("notes"), // 学习笔记
+  rating: int("rating"), // 资源评分 1-5
+  startedAt: timestamp("startedAt"),
+  completedAt: timestamp("completedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type UserLearningProgress = typeof userLearningProgress.$inferSelect;
+export type InsertUserLearningProgress = typeof userLearningProgress.$inferInsert;
+
+// 成就表
+export const achievements = mysqlTable("achievements", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(), // 成就名称
+  description: text("description").notNull(), // 成就描述
+  icon: varchar("icon", { length: 100 }), // 图标
+  category: mysqlEnum("category", ["assessment", "learning", "growth", "social"]).notNull(), // 分类
+  type: mysqlEnum("type", ["one_time", "repeatable", "progressive"]).default("one_time").notNull(), // 类型
+  condition: text("condition").notNull(), // 解锁条件(JSON)
+  points: int("points").default(10), // 成就积分
+  sortOrder: int("sortOrder").default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Achievement = typeof achievements.$inferSelect;
+export type InsertAchievement = typeof achievements.$inferInsert;
+
+// 用户成就表
+export const userAchievements = mysqlTable("userAchievements", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  achievementId: int("achievementId").notNull(),
+  unlockedAt: timestamp("unlockedAt").defaultNow().notNull(),
+  progress: int("progress").default(0), // 进度(对于progressive类型)
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type UserAchievement = typeof userAchievements.$inferSelect;
+export type InsertUserAchievement = typeof userAchievements.$inferInsert;
 
 // 公司表
 export const companies = mysqlTable("companies", {
@@ -376,3 +484,37 @@ export const changelogs = mysqlTable("changelogs", {
 
 export type Changelog = typeof changelogs.$inferSelect;
 export type InsertChangelog = typeof changelogs.$inferInsert;
+
+// 企业能力评估表
+export const organizationAssessments = mysqlTable("organizationAssessments", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  companyId: int("companyId"),
+  strategyScore: int("strategyScore").default(0).notNull(), // 战略能力 0-100
+  operationScore: int("operationScore").default(0).notNull(), // 运营能力 0-100
+  organizationScore: int("organizationScore").default(0).notNull(), // 组织能力 0-100
+  innovationScore: int("innovationScore").default(0).notNull(), // 创新能力 0-100
+  detailedScores: text("detailedScores"), // 详细评分数据 (JSON)
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type OrganizationAssessment = typeof organizationAssessments.$inferSelect;
+export type InsertOrganizationAssessment = typeof organizationAssessments.$inferInsert;
+
+// 企业能力评估历史表
+export const organizationAssessmentHistory = mysqlTable("organizationAssessmentHistory", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  strategyScore: int("strategyScore").notNull(),
+  operationScore: int("operationScore").notNull(),
+  organizationScore: int("organizationScore").notNull(),
+  innovationScore: int("innovationScore").notNull(),
+  questionAnswers: text("questionAnswers"), // 问题答案 (JSON)
+  metricValues: text("metricValues"), // 指标值 (JSON)
+  assessmentDate: timestamp("assessmentDate").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type OrganizationAssessmentHistory = typeof organizationAssessmentHistory.$inferSelect;
+export type InsertOrganizationAssessmentHistory = typeof organizationAssessmentHistory.$inferInsert;
