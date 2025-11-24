@@ -3,7 +3,7 @@
  * This is a rewritten version of server/routers.ts for D1/Workers compatibility
  * 
  * Migration Status:
- * - ✅ Auth router (basic structure)
+ * - ✅ Auth router (COMPLETE - login, logout, register, changePassword)
  * - ⏳ Profile router (TODO)
  * - ⏳ Assessment router (TODO)
  * - ⏳ Competencies router (TODO)
@@ -14,51 +14,10 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure, protectedProcedure, adminProcedure } from "./_core/trpc-d1";
+import { createUserToken } from "./_core/jwt-workers";
+import { getDefaultCookieOptions, COOKIE_NAMES } from "./_core/cookies-workers";
 import * as schema from "../drizzle/schema-d1";
 import bcrypt from "bcryptjs";
-
-/**
- * Helper: Create JWT token (using Web Crypto API for Workers)
- * TODO: Implement proper JWT creation/verification for Workers environment
- */
-async function createJWT(payload: any, secret: string): Promise<string> {
-  // Placeholder - needs Web Crypto API implementation
-  // For now, return a simple token (NOT SECURE - just for development)
-  return Buffer.from(JSON.stringify(payload)).toString('base64');
-}
-
-/**
- * Helper: Verify JWT token
- */
-async function verifyJWT(token: string, secret: string): Promise<any> {
-  // Placeholder - needs Web Crypto API implementation
-  try {
-    return JSON.parse(Buffer.from(token, 'base64').toString('utf-8'));
-  } catch {
-    throw new Error('Invalid token');
-  }
-}
-
-/**
- * Helper: Create Set-Cookie header value
- */
-function createCookieHeader(name: string, value: string, options: {
-  maxAge?: number;
-  httpOnly?: boolean;
-  secure?: boolean;
-  sameSite?: 'strict' | 'lax' | 'none';
-  path?: string;
-}): string {
-  const parts = [`${name}=${value}`];
-  
-  if (options.maxAge) parts.push(`Max-Age=${options.maxAge}`);
-  if (options.httpOnly) parts.push('HttpOnly');
-  if (options.secure) parts.push('Secure');
-  if (options.sameSite) parts.push(`SameSite=${options.sameSite}`);
-  if (options.path) parts.push(`Path=${options.path}`);
-  
-  return parts.join('; ');
-}
 
 /**
  * Authentication Router
@@ -73,15 +32,13 @@ const authRouter = router({
 
   /**
    * Logout (clear session)
-   * Note: In Workers, we can't directly clear cookies
-   * Instead, we return a Set-Cookie header with expired cookie
+   * Returns instructions for frontend to clear cookie
    */
   logout: publicProcedure.mutation(() => {
-    // Return success - frontend will handle cookie clearing
-    // Or we can return a special header instruction
     return {
       success: true,
-      clearCookie: true, // Frontend can read this and clear the cookie
+      clearCookie: true,
+      cookieName: COOKIE_NAMES.SESSION,
     } as const;
   }),
 
@@ -128,16 +85,11 @@ const authRouter = router({
       
       // Create JWT token
       const jwtSecret = env.JWT_SECRET || 'default-secret-change-me';
-      const token = await createJWT({
-        userId: user.id,
-        role: user.role,
-        email: user.email,
-        name: user.name,
-      }, jwtSecret);
+      const token = await createUserToken(user, jwtSecret);
       
       return {
         success: true,
-        token, // Frontend will store this
+        token, // Frontend will store this in cookie or localStorage
         user: {
           id: user.id,
           username: user.username,
@@ -149,22 +101,97 @@ const authRouter = router({
     }),
 
   /**
+   * User registration
+   */
+  register: publicProcedure
+    .input(z.object({
+      username: z.string().min(3, '用户名至少3位').max(20, '用户名最多20位').regex(/^[a-zA-Z0-9_]+$/, '用户名只能包含字母、数字和下划线'),
+      password: z.string().min(6, '密码至少6位'),
+      email: z.string().email('请输入有效的邮箱地址').optional(),
+      name: z.string().min(1, '请输入姓名').optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { db, env } = ctx;
+      
+      // Check if username already exists
+      const [existingUser] = await db
+        .select()
+        .from(schema.users)
+        .where(eq(schema.users.username, input.username))
+        .limit(1);
+      
+      if (existingUser) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: '用户名已存在，请选择其他用户名',
+        });
+      }
+      
+      // Check if email already exists (if provided)
+      if (input.email) {
+        const [existingEmail] = await db
+          .select()
+          .from(schema.users)
+          .where(eq(schema.users.email, input.email))
+          .limit(1);
+        
+        if (existingEmail) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: '该邮箱已被注册',
+          });
+        }
+      }
+      
+      // Generate password hash
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash(input.password, salt);
+      
+      // Generate openId (local users use local_ prefix)
+      const openId = `local_${input.username}`;
+      
+      // Create user
+      const [newUser] = await db
+        .insert(schema.users)
+        .values({
+          username: input.username,
+          passwordHash,
+          openId,
+          name: input.name || input.username,
+          email: input.email || null,
+          loginMethod: 'local',
+          role: 'user',
+        })
+        .returning();
+      
+      // Create JWT token
+      const jwtSecret = env.JWT_SECRET || 'default-secret-change-me';
+      const token = await createUserToken(newUser, jwtSecret);
+      
+      return {
+        success: true,
+        message: '注册成功',
+        token,
+        user: {
+          id: newUser.id,
+          username: newUser.username,
+          name: newUser.name,
+          email: newUser.email,
+          role: newUser.role,
+        },
+      };
+    }),
+
+  /**
    * Change password (protected)
    */
   changePassword: protectedProcedure
     .input(z.object({
-      oldPassword: z.string().min(1),
-      newPassword: z.string().min(6),
+      currentPassword: z.string().min(1),
+      newPassword: z.string().min(6, '新密码至少6位'),
     }))
     .mutation(async ({ ctx, input }) => {
       const { db, user } = ctx;
-      
-      if (!user) {
-        throw new TRPCError({
-          code: 'UNAUTHORIZED',
-          message: '请先登录',
-        });
-      }
       
       // Get user with password hash
       const [dbUser] = await db
@@ -175,28 +202,29 @@ const authRouter = router({
       
       if (!dbUser || !dbUser.passwordHash) {
         throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: '用户不存在',
+          code: 'BAD_REQUEST',
+          message: '当前用户不支持密码登录',
         });
       }
       
-      // Verify old password
-      const isValid = await bcrypt.compare(input.oldPassword, dbUser.passwordHash);
+      // Verify current password
+      const isValid = await bcrypt.compare(input.currentPassword, dbUser.passwordHash);
       if (!isValid) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
-          message: '原密码错误',
+          message: '当前密码错误',
         });
       }
       
-      // Hash new password
-      const newPasswordHash = await bcrypt.hash(input.newPassword, 10);
+      // Generate new password hash
+      const salt = await bcrypt.genSalt(10);
+      const newHash = await bcrypt.hash(input.newPassword, salt);
       
       // Update password
       await db
         .update(schema.users)
         .set({ 
-          passwordHash: newPasswordHash,
+          passwordHash: newHash,
           updatedAt: Math.floor(Date.now() / 1000),
         })
         .where(eq(schema.users.id, user.id));

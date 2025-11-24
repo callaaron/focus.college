@@ -6,6 +6,8 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
 import { initializeD1Database, Env, Database } from '../db-d1';
+import { verifyJWT, extractBearerToken } from './jwt-workers';
+import { getCookie } from './cookies-workers';
 import superjson from 'superjson';
 
 /**
@@ -35,20 +37,33 @@ export async function createD1Context(
   // Initialize database
   const db = initializeD1Database(env);
   
-  // Extract user from JWT token (similar to original context.ts)
+  // Extract user from JWT token
   let user: D1TRPCContext['user'] = null;
   
   try {
+    const jwtSecret = env.JWT_SECRET || 'default-secret-change-me-in-production';
+    
+    // Try to get token from Authorization header first
     const authHeader = req.headers.get('authorization');
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      // TODO: Implement JWT verification using Web Crypto API
-      // For now, placeholder for JWT verification
-      // const payload = await verifyJWT(token, env.JWT_SECRET);
-      // user = payload.user;
+    let token = extractBearerToken(authHeader);
+    
+    // If not in header, try cookie
+    if (!token) {
+      token = getCookie(req, 'session');
+    }
+    
+    // Verify token if found
+    if (token) {
+      const payload = await verifyJWT(token, jwtSecret);
+      user = {
+        id: payload.userId,
+        role: payload.role,
+        email: payload.email,
+        name: payload.name,
+      };
     }
   } catch (error) {
-    // Invalid token, continue with null user
+    // Invalid or expired token, continue with null user
     console.error('Token verification failed:', error);
   }
   
