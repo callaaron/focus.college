@@ -12,12 +12,13 @@ command = "npm run build"
 NODE_VERSION = "22"
 
 # D1 Database Configuration
-# After creating D1 database with: npx wrangler d1 create focus-college-db
-# Update the database_id below with the actual ID from the output
+# Database created: 2025-11-24
+# Region: ENAM (Eastern North America)
 [[d1_databases]]
 binding = "DB"
 database_name = "focus-college-db"
-database_id = "PLACEHOLDER_REPLACE_AFTER_CREATION"
+database_id = "b0d56259-a031-4331-9a9a-220cac6eda02"
+migrations_dir = "drizzle/migrations-d1"
 
 # Preview D1 Database (for branch previews)
 # [[env.preview.d1_databases]]
