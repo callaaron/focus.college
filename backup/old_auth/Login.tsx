@@ -1,56 +1,56 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Brain, Loader2, AlertCircle } from "lucide-react";
+import { Brain, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { APP_TITLE } from "@/const";
 
-// Demo accounts for quick testing
-const DEMO_ACCOUNTS = [
+const demoAccounts = [
   {
     username: 'demo_ceo',
     password: 'demo123',
-    label: '张总 (CEO)',
-    description: '大型互联网公司CEO'
+    name: '张总 (CEO)',
+    description: '大型互联网公司CEO，10年管理经验',
+    isDemo: true
   },
   {
     username: 'demo_cto',
     password: 'demo123',
-    label: '李总 (CTO)',
-    description: '技术驱动型CTO'
+    name: '李总 (CTO)',
+    description: '技术驱动型CTO，精通技术管理',
+    isDemo: true
   },
   {
     username: 'demo_manager',
     password: 'demo123',
-    label: '王经理',
-    description: '中层管理者'
+    name: '王经理 (产品经理)',
+    description: '中层管理者，3年产品管理经验',
+    isDemo: true
   }
+  // 管理员账户已隐藏，请联系系统管理员获取管理权限
 ];
 
 export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [, setLocation] = useLocation();
 
+  // 统一登录接口
   const loginMutation = trpc.auth.localLogin.useMutation({
     onSuccess: (data) => {
-      console.log('✅ 登录成功！', data);
-      
-      // Save token to localStorage
+      // Store JWT token in localStorage
       if (data.token) {
         localStorage.setItem('auth_token', data.token);
-        console.log('✅ Token 已保存到 localStorage');
       }
-      
       // Redirect to dashboard
-      console.log('🔄 正在跳转到 dashboard...');
       window.location.href = '/dashboard';
     },
     onError: (err) => {
-      console.error('❌ 登录失败：', err);
       setError(err.message || "登录失败，请检查用户名和密码");
     }
   });
@@ -59,22 +59,21 @@ export default function Login() {
     e.preventDefault();
     setError("");
     
-    console.log('📝 提交登录表单...', { username });
-    
     if (!username || !password) {
       setError("请输入用户名和密码");
       return;
     }
 
+    // 统一使用 localLogin
     loginMutation.mutate({ username, password });
   };
 
-  const handleDemoLogin = (account: typeof DEMO_ACCOUNTS[0]) => {
-    console.log('🎭 使用 Demo 账户登录：', account.username);
-    setError("");
+  const handleDemoLogin = (account: typeof demoAccounts[0]) => {
     setUsername(account.username);
     setPassword(account.password);
+    setError("");
     
+    // 统一使用 localLogin
     loginMutation.mutate({ 
       username: account.username, 
       password: account.password 
@@ -86,19 +85,22 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5 p-4">
       <div className="w-full max-w-5xl">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3 mb-4">
+        <div className="text-center mb-8 space-y-3">
+          <div className="flex items-center justify-center gap-3 mb-6">
             <div className="p-3 bg-primary/10 rounded-xl">
               <Brain className="h-10 w-10 text-primary" />
             </div>
           </div>
-          <h1 className="text-4xl font-bold tracking-tight mb-2">
-            {APP_TITLE || "创业进化系统"}
-          </h1>
-          <p className="text-lg text-muted-foreground">
+          <h1 className="text-4xl font-bold tracking-tight">{APP_TITLE || "创业进化系统"}</h1>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             AI驱动的创业能力评估与成长平台
           </p>
+          <div className="flex items-center justify-center gap-2 pt-2">
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <span className="text-sm text-muted-foreground">
+              无需注册，选择演示账户即可体验
+            </span>
+          </div>
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">
@@ -107,28 +109,20 @@ export default function Login() {
             <CardHeader>
               <CardTitle>登录</CardTitle>
               <CardDescription>
-                使用您的账户登录系统
+                使用演示账户登录体验系统
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
-                {error && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
-
                 <div className="space-y-2">
                   <Label htmlFor="username">用户名</Label>
                   <Input
                     id="username"
                     type="text"
-                    placeholder="请输入用户名"
+                    placeholder="demo_ceo"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     disabled={isLoading}
-                    autoComplete="username"
                   />
                 </div>
 
@@ -137,17 +131,23 @@ export default function Login() {
                   <Input
                     id="password"
                     type="password"
-                    placeholder="请输入密码"
+                    placeholder="demo123"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={isLoading}
-                    autoComplete="current-password"
                   />
                 </div>
 
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+
                 <Button 
                   type="submit" 
-                  className="w-full"
+                  className="w-full" 
                   disabled={isLoading}
                 >
                   {isLoading ? (
@@ -160,11 +160,18 @@ export default function Login() {
                   )}
                 </Button>
 
+                {/* Register Link */}
                 <div className="text-center text-sm text-muted-foreground">
                   还没有账户？{" "}
-                  <a href="/register" className="text-primary hover:underline">
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="p-0 h-auto font-normal"
+                    onClick={() => setLocation('/register')}
+                    disabled={isLoading}
+                  >
                     立即注册
-                  </a>
+                  </Button>
                 </div>
               </form>
             </CardContent>
@@ -173,13 +180,13 @@ export default function Login() {
           {/* Demo Accounts */}
           <Card>
             <CardHeader>
-              <CardTitle>快速体验</CardTitle>
+              <CardTitle>演示账户</CardTitle>
               <CardDescription>
-                使用演示账户快速登录体验系统功能
+                点击下方账户快速登录体验
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {DEMO_ACCOUNTS.map((account) => (
+              {demoAccounts.map((account) => (
                 <Button
                   key={account.username}
                   variant="outline"
@@ -187,22 +194,31 @@ export default function Login() {
                   onClick={() => handleDemoLogin(account)}
                   disabled={isLoading}
                 >
-                  <div className="text-left flex-1">
-                    <div className="font-semibold">{account.label}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {account.description}
+                  <div className="flex items-start gap-3 text-left">
+                    <CheckCircle2 className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium">{account.name}</div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        {account.description}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        用户名: {account.username} | 密码: {account.password}
+                      </div>
                     </div>
                   </div>
                 </Button>
               ))}
-              
-              <div className="pt-3 border-t">
-                <p className="text-xs text-muted-foreground text-center">
-                  演示账户密码统一为: demo123
-                </p>
-              </div>
             </CardContent>
           </Card>
+        </div>
+
+        <div className="mt-6 text-center">
+          <Button 
+            variant="ghost" 
+            onClick={() => setLocation('/')}
+          >
+            返回首页
+          </Button>
         </div>
       </div>
     </div>
