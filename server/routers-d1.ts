@@ -734,6 +734,46 @@ const competenciesRouter = router({
     
     return scores;
   }),
+
+  /**
+   * Get user's competency progress (compatibility endpoint)
+   */
+  myProgress: protectedProcedure.query(async ({ ctx }) => {
+    const { db, user } = ctx;
+    
+    // Get all competencies
+    const allCompetencies = await db
+      .select()
+      .from(schema.competencies)
+      .orderBy(schema.competencies.sortOrder);
+    
+    // Get user's scores
+    const userScores = await db
+      .select()
+      .from(schema.competencyScores)
+      .where(eq(schema.competencyScores.userId, user.id));
+    
+    // Merge competencies with user progress
+    return allCompetencies.map(comp => {
+      const score = userScores.find(s => s.competencyId === comp.id);
+      return {
+        ...comp,
+        userProgress: score ? {
+          currentLevel: score.level || 0,
+          selfAssessed: score.selfAssessedScore || 0,
+          aiAssessed: score.aiAssessedScore || 0,
+          practiceCount: 0,
+          status: (score.level || 0) >= 3 ? "mastered" : (score.level || 0) >= 1 ? "learning" : "not_started" as const
+        } : {
+          currentLevel: 0,
+          selfAssessed: 0,
+          aiAssessed: 0,
+          practiceCount: 0,
+          status: "not_started" as const
+        }
+      };
+    });
+  }),
 });
 
 /**
