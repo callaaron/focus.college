@@ -5,12 +5,6 @@ compatibility_date = "2024-01-01"
 # Pages Configuration
 pages_build_output_dir = "dist/public"
 
-[build]
-command = "npm run build"
-
-[build.environment]
-NODE_VERSION = "22"
-
 # D1 Database Configuration
 # Database created: 2025-11-24
 # Region: ENAM (Eastern North America)
