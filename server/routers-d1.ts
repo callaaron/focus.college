@@ -671,6 +671,184 @@ const assessmentRouter = router({
 });
 
 /**
+ * Competencies Router - Competency management
+ */
+const competenciesRouter = router({
+  /**
+   * Get all competencies
+   */
+  list: protectedProcedure.query(async ({ ctx }) => {
+    const { db } = ctx;
+    
+    const competencies = await db
+      .select()
+      .from(schema.competencies)
+      .orderBy(schema.competencies.sortOrder);
+    
+    return competencies;
+  }),
+
+  /**
+   * Get competencies by domain
+   */
+  getByDomain: protectedProcedure
+    .input(z.object({
+      domainId: z.number(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { db } = ctx;
+      
+      const competencies = await db
+        .select()
+        .from(schema.competencies)
+        .where(eq(schema.competencies.domainId, input.domainId))
+        .orderBy(schema.competencies.sortOrder);
+      
+      return competencies;
+    }),
+
+  /**
+   * Get all competency domains
+   */
+  getDomains: protectedProcedure.query(async ({ ctx }) => {
+    const { db } = ctx;
+    
+    const domains = await db
+      .select()
+      .from(schema.competencyDomains)
+      .orderBy(schema.competencyDomains.sortOrder);
+    
+    return domains;
+  }),
+
+  /**
+   * Get user's competency scores
+   */
+  getUserScores: protectedProcedure.query(async ({ ctx }) => {
+    const { db, user } = ctx;
+    
+    const scores = await db
+      .select()
+      .from(schema.competencyScores)
+      .where(eq(schema.competencyScores.userId, user.id));
+    
+    return scores;
+  }),
+});
+
+/**
+ * Organization Assessment Router
+ */
+const organizationRouter = router({
+  /**
+   * Get organization assessment
+   */
+  getAssessment: protectedProcedure.query(async ({ ctx }) => {
+    const { db, user } = ctx;
+    
+    const [assessment] = await db
+      .select()
+      .from(schema.organizationAssessments)
+      .where(eq(schema.organizationAssessments.userId, user.id))
+      .orderBy(desc(schema.organizationAssessments.createdAt))
+      .limit(1);
+    
+    return assessment || null;
+  }),
+
+  /**
+   * Submit organization assessment
+   */
+  submitAssessment: protectedProcedure
+    .input(z.object({
+      strategyScore: z.number().min(0).max(100),
+      operationScore: z.number().min(0).max(100),
+      organizationScore: z.number().min(0).max(100),
+      innovationScore: z.number().min(0).max(100),
+      detailedScores: z.string().optional(), // JSON string
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { db, user } = ctx;
+      
+      // Create new assessment
+      await db.insert(schema.organizationAssessments).values({
+        userId: user.id,
+        strategyScore: input.strategyScore,
+        operationScore: input.operationScore,
+        organizationScore: input.organizationScore,
+        innovationScore: input.innovationScore,
+        detailedScores: input.detailedScores || null,
+      });
+      
+      // Also save to history
+      await db.insert(schema.organizationAssessmentHistory).values({
+        userId: user.id,
+        strategyScore: input.strategyScore,
+        operationScore: input.operationScore,
+        organizationScore: input.organizationScore,
+        innovationScore: input.innovationScore,
+        questionAnswers: null,
+        metricValues: null,
+        assessmentDate: Math.floor(Date.now() / 1000),
+      });
+      
+      return { success: true };
+    }),
+
+  /**
+   * Get assessment history
+   */
+  getHistory: protectedProcedure.query(async ({ ctx }) => {
+    const { db, user } = ctx;
+    
+    const history = await db
+      .select()
+      .from(schema.organizationAssessmentHistory)
+      .where(eq(schema.organizationAssessmentHistory.userId, user.id))
+      .orderBy(desc(schema.organizationAssessmentHistory.assessmentDate))
+      .limit(10);
+    
+    return history;
+  }),
+});
+
+/**
+ * Industries Router - Industry data
+ */
+const industriesRouter = router({
+  /**
+   * Get all industries
+   */
+  list: publicProcedure.query(async ({ ctx }) => {
+    const { db } = ctx;
+    
+    const industries = await db
+      .select()
+      .from(schema.industries);
+    
+    return industries;
+  }),
+});
+
+/**
+ * Positions Router - Position data
+ */
+const positionsRouter = router({
+  /**
+   * Get all positions
+   */
+  list: publicProcedure.query(async ({ ctx }) => {
+    const { db } = ctx;
+    
+    const positions = await db
+      .select()
+      .from(schema.positions);
+    
+    return positions;
+  }),
+});
+
+/**
  * Main App Router
  * Combines all sub-routers
  */
@@ -678,9 +856,11 @@ export const appRouter = router({
   auth: authRouter,
   profile: profileRouter,
   assessment: assessmentRouter,
-  // TODO: Add more routers as they're migrated:
-  // competencies: competenciesRouter,
-  // organization: organizationRouter,
+  competencies: competenciesRouter,
+  organization: organizationRouter,
+  industries: industriesRouter,
+  positions: positionsRouter,
+  // TODO: Add more routers as needed:
   // scenarios: scenariosRouter,
   // learning: learningRouter,
   // achievements: achievementsRouter,
