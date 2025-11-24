@@ -1348,6 +1348,250 @@ const achievementsRouter = router({
 });
 
 /**
+ * Admin Router - 管理员功能
+ */
+const adminRouter = router({
+  /**
+   * Get all users (admin only)
+   */
+  listUsers: adminProcedure
+    .input(z.object({
+      page: z.number().min(1).default(1),
+      limit: z.number().min(1).max(100).default(20),
+      search: z.string().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { db } = ctx;
+      const offset = (input.page - 1) * input.limit;
+      
+      // Build query
+      let query = db.select().from(schema.users);
+      
+      if (input.search) {
+        query = query.where(
+          sql`${schema.users.username} LIKE ${`%${input.search}%`} OR ${schema.users.name} LIKE ${`%${input.search}%`} OR ${schema.users.email} LIKE ${`%${input.search}%`}`
+        );
+      }
+      
+      const users = await query
+        .limit(input.limit)
+        .offset(offset)
+        .orderBy(desc(schema.users.createdAt));
+      
+      // Get total count
+      const [countResult] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(schema.users);
+      
+      return {
+        users: users.map(u => ({
+          id: u.id,
+          username: u.username,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          isDemo: u.isDemo,
+          createdAt: u.createdAt,
+          lastSignedIn: u.lastSignedIn,
+        })),
+        total: countResult?.count || 0,
+        page: input.page,
+        limit: input.limit,
+      };
+    }),
+  
+  /**
+   * Get user detail (admin only)
+   */
+  getUserDetail: adminProcedure
+    .input(z.object({
+      userId: z.number(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { db } = ctx;
+      
+      const [user] = await db
+        .select()
+        .from(schema.users)
+        .where(eq(schema.users.id, input.userId))
+        .limit(1);
+      
+      if (!user) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: '用户不存在',
+        });
+      }
+      
+      // Get user's profile
+      const [profile] = await db
+        .select()
+        .from(schema.userProfiles)
+        .where(eq(schema.userProfiles.userId, input.userId))
+        .limit(1);
+      
+      // Get user's competency scores count
+      const [scoresCount] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(schema.competencyScores)
+        .where(eq(schema.competencyScores.userId, input.userId));
+      
+      // Get user's assessment sessions count
+      const [sessionsCount] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(schema.assessmentSessions)
+        .where(eq(schema.assessmentSessions.userId, input.userId));
+      
+      return {
+        ...user,
+        passwordHash: undefined, // Don't expose password hash
+        profile,
+        stats: {
+          competencyScores: scoresCount?.count || 0,
+          assessmentSessions: sessionsCount?.count || 0,
+        },
+      };
+    }),
+  
+  /**
+   * Update user role (admin only)
+   */
+  updateUserRole: adminProcedure
+    .input(z.object({
+      userId: z.number(),
+      role: z.enum(['user', 'admin']),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { db, user } = ctx;
+      
+      // Prevent admin from changing their own role
+      if (user.id === input.userId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: '不能修改自己的权限',
+        });
+      }
+      
+      const now = Math.floor(Date.now() / 1000);
+      
+      await db
+        .update(schema.users)
+        .set({
+          role: input.role,
+          updatedAt: now,
+        })
+        .where(eq(schema.users.id, input.userId));
+      
+      return { success: true };
+    }),
+  
+  /**
+   * Delete user (admin only)
+   */
+  deleteUser: adminProcedure
+    .input(z.object({
+      userId: z.number(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { db, user } = ctx;
+      
+      // Prevent admin from deleting themselves
+      if (user.id === input.userId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: '不能删除自己的账户',
+        });
+      }
+      
+      // Delete user (cascade will handle related records if configured)
+      await db
+        .delete(schema.users)
+        .where(eq(schema.users.id, input.userId));
+      
+      return { success: true };
+    }),
+  
+  /**
+   * Reset user password (admin only)
+   */
+  resetUserPassword: adminProcedure
+    .input(z.object({
+      userId: z.number(),
+      newPassword: z.string().min(6, '密码至少6位'),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { db } = ctx;
+      
+      // Generate new password hash
+      const salt = await bcrypt.genSalt(10);
+      const newHash = await bcrypt.hash(input.newPassword, salt);
+      
+      const now = Math.floor(Date.now() / 1000);
+      
+      await db
+        .update(schema.users)
+        .set({
+          passwordHash: newHash,
+          updatedAt: now,
+        })
+        .where(eq(schema.users.id, input.userId));
+      
+      return { success: true };
+    }),
+  
+  /**
+   * Get system statistics (admin only)
+   */
+  getSystemStats: adminProcedure.query(async ({ ctx }) => {
+    const { db } = ctx;
+    
+    // Get user counts
+    const [userCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.users);
+    
+    const [demoUserCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.users)
+      .where(eq(schema.users.isDemo, 1));
+    
+    const [adminCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.users)
+      .where(eq(schema.users.role, 'admin'));
+    
+    // Get assessment count
+    const [assessmentCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.assessmentSessions);
+    
+    // Get scenario count
+    const [scenarioCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.scenarios);
+    
+    // Get learning path count
+    const [learningPathCount] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.learningPaths);
+    
+    return {
+      users: {
+        total: userCount?.count || 0,
+        demo: demoUserCount?.count || 0,
+        admin: adminCount?.count || 0,
+        regular: (userCount?.count || 0) - (demoUserCount?.count || 0),
+      },
+      activities: {
+        assessments: assessmentCount?.count || 0,
+        scenarios: scenarioCount?.count || 0,
+        learningPaths: learningPathCount?.count || 0,
+      },
+    };
+  }),
+});
+
+/**
  * Main App Router
  * Combines all sub-routers
  */
@@ -1362,10 +1606,10 @@ export const appRouter = router({
   scenarios: scenariosRouter,
   learning: learningRouter,
   achievements: achievementsRouter,
+  admin: adminRouter,
   // TODO: Add more routers as needed:
   // wiki: wikiRouter,
   // feedback: feedbackRouter,
-  // admin: adminRouter,
 });
 
 /**

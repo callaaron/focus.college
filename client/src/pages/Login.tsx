@@ -30,14 +30,8 @@ const demoAccounts = [
     name: '王经理 (产品经理)',
     description: '中层管理者，3年产品管理经验',
     isDemo: true
-  },
-  {
-    username: 'admin',
-    password: '123456',
-    name: '系统管理员',
-    description: '拥有完整管理权限，可管理用户和系统配置',
-    isDemo: false
   }
+  // 管理员账户已隐藏，请联系系统管理员获取管理权限
 ];
 
 export default function Login() {
@@ -46,18 +40,8 @@ export default function Login() {
   const [error, setError] = useState("");
   const [, setLocation] = useLocation();
 
-  // 本地登录
-  const localLoginMutation = trpc.auth.localLogin.useMutation({
-    onSuccess: () => {
-      window.location.href = '/dashboard';
-    },
-    onError: (err) => {
-      setError(err.message || "登录失败，请检查用户名和密码");
-    }
-  });
-
-  // 演示账户登录
-  const demoLoginMutation = trpc.demoAccounts.login.useMutation({
+  // 统一登录接口
+  const loginMutation = trpc.auth.localLogin.useMutation({
     onSuccess: () => {
       window.location.href = '/dashboard';
     },
@@ -75,12 +59,8 @@ export default function Login() {
       return;
     }
 
-    // 判断是admin还是demo账户
-    if (username === 'admin') {
-      localLoginMutation.mutate({ username, password });
-    } else {
-      demoLoginMutation.mutate({ username, password });
-    }
+    // 统一使用 localLogin
+    loginMutation.mutate({ username, password });
   };
 
   const handleDemoLogin = (account: typeof demoAccounts[0]) => {
@@ -88,20 +68,14 @@ export default function Login() {
     setPassword(account.password);
     setError("");
     
-    if (account.isDemo) {
-      demoLoginMutation.mutate({ 
-        username: account.username, 
-        password: account.password 
-      });
-    } else {
-      localLoginMutation.mutate({ 
-        username: account.username, 
-        password: account.password 
-      });
-    }
+    // 统一使用 localLogin
+    loginMutation.mutate({ 
+      username: account.username, 
+      password: account.password 
+    });
   };
 
-  const isLoading = localLoginMutation.isPending || demoLoginMutation.isPending;
+  const isLoading = loginMutation.isPending;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5 p-4">
