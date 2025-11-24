@@ -19,7 +19,11 @@ export default function Register() {
   const [, setLocation] = useLocation();
 
   const registerMutation = trpc.auth.register.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Store JWT token in localStorage
+      if (data.token) {
+        localStorage.setItem('auth_token', data.token);
+      }
       // 注册成功后自动跳转到dashboard
       window.location.href = '/dashboard';
     },

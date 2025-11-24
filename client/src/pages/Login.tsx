@@ -42,7 +42,12 @@ export default function Login() {
 
   // 统一登录接口
   const loginMutation = trpc.auth.localLogin.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Store JWT token in localStorage
+      if (data.token) {
+        localStorage.setItem('auth_token', data.token);
+      }
+      // Redirect to dashboard
       window.location.href = '/dashboard';
     },
     onError: (err) => {
