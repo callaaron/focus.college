@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { APP_TITLE, getLoginUrl } from "@/const";
+import { APP_TITLE } from "@/const";
 import { 
   TrendingUp, 
   Target, 
