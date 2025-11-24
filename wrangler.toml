@@ -1,0 +1,20 @@
+# Cloudflare Pages Configuration
+name = "focus-college"
+compatibility_date = "2024-01-01"
+
+# Pages Configuration
+pages_build_output_dir = "dist/public"
+
+[build]
+command = "npm run build"
+
+[build.environment]
+NODE_VERSION = "22"
+
+# Environment Variables (set in Cloudflare Dashboard)
+# DATABASE_URL - Your MySQL connection string
+# JWT_SECRET - Your JWT secret key
+# VITE_APP_TITLE - Application title
+
+# Custom domains will be configured in Cloudflare Dashboard
+# Go to: Pages project → Custom domains → Add custom domain
