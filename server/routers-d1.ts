@@ -237,16 +237,183 @@ const authRouter = router({
 });
 
 /**
- * Profile Router (Stub - TODO: Implement)
+ * Profile Router
  */
 const profileRouter = router({
+  /**
+   * Get current user profile
+   */
   get: protectedProcedure.query(async ({ ctx }) => {
-    // TODO: Implement profile fetching
-    throw new TRPCError({
-      code: 'NOT_IMPLEMENTED',
-      message: 'Profile router not yet implemented in D1 version',
-    });
+    const { db, user } = ctx;
+    
+    const [profile] = await db
+      .select()
+      .from(schema.userProfiles)
+      .where(eq(schema.userProfiles.userId, user.id))
+      .limit(1);
+    
+    return profile || null;
   }),
+
+  /**
+   * Get profile completion status
+   */
+  getCompletion: protectedProcedure.query(async ({ ctx }) => {
+    const { db, user } = ctx;
+    
+    const [profile] = await db
+      .select()
+      .from(schema.userProfiles)
+      .where(eq(schema.userProfiles.userId, user.id))
+      .limit(1);
+    
+    if (!profile) {
+      return {
+        completionRate: 0,
+        missingFields: [
+          "行业类型", "公司规模", "发展阶段", "当前岗位",
+          "管理级别", "直接下属人数", "团队总人数", "管理年限"
+        ]
+      };
+    }
+
+    const fields = [
+      { key: 'industry', label: '行业类型' },
+      { key: 'companySize', label: '公司规模' },
+      { key: 'companyStage', label: '发展阶段' },
+      { key: 'currentRole', label: '当前岗位' },
+      { key: 'managementLevel', label: '管理级别' },
+      { key: 'directReports', label: '直接下属人数' },
+      { key: 'teamSize', label: '团队总人数' },
+      { key: 'yearsOfManagement', label: '管理年限' },
+    ];
+
+    const missingFields: string[] = [];
+    let filledCount = 0;
+
+    for (const field of fields) {
+      const value = (profile as any)[field.key];
+      // For number fields, 0 is a valid value
+      if (value === null || value === undefined || value === '') {
+        missingFields.push(field.label);
+      } else {
+        filledCount++;
+      }
+    }
+
+    const completionRate = Math.round((filledCount / fields.length) * 100);
+
+    return {
+      completionRate,
+      missingFields
+    };
+  }),
+
+  /**
+   * Create user profile
+   */
+  create: protectedProcedure
+    .input(z.object({
+      industry: z.string(),
+      industryId: z.number().optional(),
+      companySize: z.enum(["startup", "small", "medium", "large"]),
+      companyStage: z.enum(["seed", "angel", "series_a", "series_b", "series_c", "series_d", "pre_ipo", "public", "mature"]),
+      currentRole: z.string(),
+      positionId: z.number().optional(),
+      managementLevel: z.enum(["executive", "senior", "middle", "junior"]),
+      directReports: z.number(),
+      teamSize: z.number(),
+      yearsOfManagement: z.number(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { db, user } = ctx;
+      
+      // Check if profile already exists
+      const [existing] = await db
+        .select()
+        .from(schema.userProfiles)
+        .where(eq(schema.userProfiles.userId, user.id))
+        .limit(1);
+      
+      if (existing) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: '用户画像已存在，请使用更新接口',
+        });
+      }
+      
+      await db.insert(schema.userProfiles).values({
+        userId: user.id,
+        industry: input.industry,
+        industryId: input.industryId || null,
+        companySize: input.companySize,
+        companyStage: input.companyStage,
+        currentRole: input.currentRole,
+        positionId: input.positionId || null,
+        managementLevel: input.managementLevel,
+        directReports: input.directReports,
+        teamSize: input.teamSize,
+        yearsOfManagement: input.yearsOfManagement,
+        profileCompleted: true,
+      });
+      
+      return { success: true };
+    }),
+
+  /**
+   * Update user profile
+   */
+  update: protectedProcedure
+    .input(z.object({
+      industry: z.string().optional(),
+      industryId: z.number().optional(),
+      companySize: z.enum(["startup", "small", "medium", "large"]).optional(),
+      companyStage: z.enum(["seed", "angel", "series_a", "series_b", "series_c", "series_d", "pre_ipo", "public", "mature"]).optional(),
+      currentRole: z.string().optional(),
+      positionId: z.number().optional(),
+      managementLevel: z.enum(["executive", "senior", "middle", "junior"]).optional(),
+      directReports: z.number().optional(),
+      teamSize: z.number().optional(),
+      yearsOfManagement: z.number().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { db, user } = ctx;
+      
+      // Check if profile exists
+      const [existing] = await db
+        .select()
+        .from(schema.userProfiles)
+        .where(eq(schema.userProfiles.userId, user.id))
+        .limit(1);
+      
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: '用户画像不存在，请先创建',
+        });
+      }
+      
+      // Filter out undefined values
+      const updates: any = {};
+      if (input.industry !== undefined) updates.industry = input.industry;
+      if (input.industryId !== undefined) updates.industryId = input.industryId;
+      if (input.companySize !== undefined) updates.companySize = input.companySize;
+      if (input.companyStage !== undefined) updates.companyStage = input.companyStage;
+      if (input.currentRole !== undefined) updates.currentRole = input.currentRole;
+      if (input.positionId !== undefined) updates.positionId = input.positionId;
+      if (input.managementLevel !== undefined) updates.managementLevel = input.managementLevel;
+      if (input.directReports !== undefined) updates.directReports = input.directReports;
+      if (input.teamSize !== undefined) updates.teamSize = input.teamSize;
+      if (input.yearsOfManagement !== undefined) updates.yearsOfManagement = input.yearsOfManagement;
+      updates.updatedAt = Math.floor(Date.now() / 1000);
+      
+      await db
+        .update(schema.userProfiles)
+        .set(updates)
+        .where(eq(schema.userProfiles.userId, user.id));
+      
+      return { success: true };
+    }),
 });
 
 /**
