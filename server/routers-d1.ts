@@ -11,7 +11,7 @@
  */
 
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure, protectedProcedure, adminProcedure } from "./_core/trpc-d1";
 import { createUserToken } from "./_core/jwt-workers";
@@ -417,15 +417,256 @@ const profileRouter = router({
 });
 
 /**
- * Assessment Router (Stub - TODO: Implement)
+ * Assessment Router - Question-based evaluation system
  */
 const assessmentRouter = router({
-  getQuestions: protectedProcedure.query(async ({ ctx }) => {
-    // TODO: Implement question fetching
-    throw new TRPCError({
-      code: 'NOT_IMPLEMENTED',
-      message: 'Assessment router not yet implemented in D1 version',
-    });
+  /**
+   * Get assessment questions
+   */
+  getQuestions: protectedProcedure
+    .input(z.object({
+      competencyId: z.number().optional(),
+      limit: z.number().optional().default(10),
+      excludeAnswered: z.boolean().default(true),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { db, user } = ctx;
+      
+      // Build query
+      let query = db
+        .select()
+        .from(schema.assessmentQuestions)
+        .where(eq(schema.assessmentQuestions.isActive, true));
+      
+      // Filter by competency if specified
+      if (input.competencyId) {
+        query = query.where(eq(schema.assessmentQuestions.competencyId, input.competencyId)) as any;
+      }
+      
+      // Get questions
+      let questions = await query
+        .orderBy(schema.assessmentQuestions.sortOrder)
+        .limit(input.limit);
+      
+      // Exclude answered questions if requested
+      if (input.excludeAnswered) {
+        const answeredQuestions = await db
+          .select({ questionId: schema.userAnswers.questionId })
+          .from(schema.userAnswers)
+          .where(eq(schema.userAnswers.userId, user.id));
+        
+        const answeredIds = new Set(answeredQuestions.map(a => a.questionId));
+        questions = questions.filter(q => !answeredIds.has(q.id));
+      }
+      
+      return questions;
+    }),
+
+  /**
+   * Create assessment session
+   */
+  startSession: protectedProcedure
+    .input(z.object({
+      sessionType: z.enum(["initial", "regular", "position"]),
+      totalQuestions: z.number(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { db, user } = ctx;
+      
+      const [session] = await db
+        .insert(schema.assessmentSessions)
+        .values({
+          userId: user.id,
+          sessionType: input.sessionType,
+          totalQuestions: input.totalQuestions,
+          answeredQuestions: 0,
+          status: 'in_progress',
+        })
+        .returning();
+      
+      return { sessionId: session.id };
+    }),
+
+  /**
+   * Submit answer for a question
+   */
+  submitAnswer: protectedProcedure
+    .input(z.object({
+      sessionId: z.number(),
+      questionId: z.number(),
+      competencyId: z.number(),
+      answer: z.number().min(1).max(5), // Answer option 1-5
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { db, user } = ctx;
+      
+      // Get question to find score mapping
+      const [question] = await db
+        .select()
+        .from(schema.assessmentQuestions)
+        .where(eq(schema.assessmentQuestions.id, input.questionId))
+        .limit(1);
+      
+      if (!question) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: '题目不存在',
+        });
+      }
+      
+      // Map answer to score
+      const scoreMap: Record<number, number> = {
+        1: question.score1 || 20,
+        2: question.score2 || 40,
+        3: question.score3 || 60,
+        4: question.score4 || 80,
+        5: question.score5 || 100,
+      };
+      
+      const score = scoreMap[input.answer] || 0;
+      
+      // Save answer
+      await db.insert(schema.userAnswers).values({
+        userId: user.id,
+        sessionId: input.sessionId,
+        questionId: input.questionId,
+        competencyId: input.competencyId,
+        answer: input.answer,
+        score,
+      });
+      
+      // Update session progress
+      await db
+        .update(schema.assessmentSessions)
+        .set({ 
+          answeredQuestions: sql`${schema.assessmentSessions.answeredQuestions} + 1`,
+        })
+        .where(eq(schema.assessmentSessions.id, input.sessionId));
+      
+      // Update or create competency score
+      const [existingScore] = await db
+        .select()
+        .from(schema.competencyScores)
+        .where(
+          and(
+            eq(schema.competencyScores.userId, user.id),
+            eq(schema.competencyScores.competencyId, input.competencyId)
+          )
+        )
+        .limit(1);
+      
+      if (existingScore) {
+        // Update existing score
+        const newQuestionnaireScore = Math.round(
+          ((existingScore.questionnaireScore || 0) * (existingScore.practiceCount || 0) + score) /
+          ((existingScore.practiceCount || 0) + 1)
+        );
+        
+        // Calculate weighted final score
+        const finalScore = Math.round(
+          newQuestionnaireScore * (existingScore.questionnaireWeight / 100) +
+          (existingScore.selfAssessmentScore || 0) * (existingScore.selfAssessmentWeight / 100) +
+          (existingScore.aiAnalysisScore || 0) * (existingScore.aiAnalysisWeight / 100) +
+          (existingScore.evidenceScore || 0) * (existingScore.evidenceWeight / 100)
+        );
+        
+        const level = Math.min(5, Math.floor(finalScore / 20) + 1);
+        
+        await db
+          .update(schema.competencyScores)
+          .set({
+            questionnaireScore: newQuestionnaireScore,
+            finalScore,
+            level,
+            practiceCount: (existingScore.practiceCount || 0) + 1,
+            lastPracticeAt: Math.floor(Date.now() / 1000),
+            updatedAt: Math.floor(Date.now() / 1000),
+          })
+          .where(eq(schema.competencyScores.id, existingScore.id));
+      } else {
+        // Create new score record
+        const finalScore = Math.round(score * 0.4); // 40% weight for questionnaire
+        const level = Math.min(5, Math.floor(finalScore / 20) + 1);
+        
+        await db.insert(schema.competencyScores).values({
+          userId: user.id,
+          competencyId: input.competencyId,
+          questionnaireScore: score,
+          finalScore,
+          level,
+          practiceCount: 1,
+          lastPracticeAt: Math.floor(Date.now() / 1000),
+        });
+      }
+      
+      return { success: true, score };
+    }),
+
+  /**
+   * Complete assessment session
+   */
+  completeSession: protectedProcedure
+    .input(z.object({
+      sessionId: z.number(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { db } = ctx;
+      
+      await db
+        .update(schema.assessmentSessions)
+        .set({
+          status: 'completed',
+          completedAt: Math.floor(Date.now() / 1000),
+        })
+        .where(eq(schema.assessmentSessions.id, input.sessionId));
+      
+      return { success: true };
+    }),
+
+  /**
+   * Get user's assessment progress
+   */
+  getProgress: protectedProcedure.query(async ({ ctx }) => {
+    const { db, user } = ctx;
+    
+    // Get all sessions
+    const sessions = await db
+      .select()
+      .from(schema.assessmentSessions)
+      .where(eq(schema.assessmentSessions.userId, user.id))
+      .orderBy(desc(schema.assessmentSessions.createdAt));
+    
+    // Get all answers
+    const answers = await db
+      .select()
+      .from(schema.userAnswers)
+      .where(eq(schema.userAnswers.userId, user.id));
+    
+    // Get competency scores
+    const scores = await db
+      .select()
+      .from(schema.competencyScores)
+      .where(eq(schema.competencyScores.userId, user.id));
+    
+    return {
+      sessions,
+      totalAnswers: answers.length,
+      competencyScores: scores,
+    };
+  }),
+
+  /**
+   * Get user's competency scores
+   */
+  getScores: protectedProcedure.query(async ({ ctx }) => {
+    const { db, user } = ctx;
+    
+    const scores = await db
+      .select()
+      .from(schema.competencyScores)
+      .where(eq(schema.competencyScores.userId, user.id));
+    
+    return scores;
   }),
 });
 
