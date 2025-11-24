@@ -849,6 +849,505 @@ const positionsRouter = router({
 });
 
 /**
+ * Scenarios Router - 情境模拟系统
+ */
+const scenariosRouter = router({
+  /**
+   * Submit a new management scenario for AI analysis
+   */
+  submit: protectedProcedure
+    .input(z.object({
+      title: z.string().min(1, '标题不能为空'),
+      description: z.string().min(10, '描述至少10个字符'),
+      companyStage: z.enum(['seed', 'angel', 'series_a', 'series_b', 'series_c', 'series_d', 'pre_ipo', 'public', 'mature']).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { db, user } = ctx;
+      
+      // Get user profile for context
+      const [userProfile] = await db
+        .select()
+        .from(schema.userProfiles)
+        .where(eq(schema.userProfiles.userId, user.id))
+        .limit(1);
+      
+      // Get all competencies for context
+      const allCompetencies = await db.select().from(schema.competencies);
+      
+      const competenciesContext = allCompetencies
+        .map(c => `- ${c.name} (${c.category}): ${c.description}`)
+        .join('\n');
+      
+      // Build user context
+      const userContext = userProfile ? `
+**用户背景**：
+- 行业：${userProfile.industry || '未知'}
+- 公司规模：${userProfile.companySize || '未知'}
+- 当前岗位：${userProfile.currentRole || '未知'}
+- 管理级别：${userProfile.managementLevel || '未知'}
+- 管理年限：${userProfile.yearsOfManagement || 0}年
+- 直接下属：${userProfile.directReports || 0}人` : '';
+      
+      // AI analysis (simplified - actual AI integration would go here)
+      const aiResult = {
+        analysis: `## 问题诊断\n\n基于您提交的场景"${input.title}"，这是一个典型的管理挑战。\n\n### 表现和影响\n${input.description}\n\n### 根本原因\n- 系统层面：流程不清晰\n- 人员层面：沟通不畅\n- 文化层面：协作不足`,
+        suggestions: `## 解决建议\n\n### 短期行动（1-2周）\n1. 立即召开团队会议\n2. 明确责任分工\n\n### 中期优化（1-3个月）\n1. 优化工作流程\n2. 建立反馈机制\n\n### 长期建设\n1. 建立系统化管理体系\n2. 培养团队能力`,
+        competencies: [
+          { name: '战略思维', importance: 5, category: '战略模块', reason: '需要从全局角度思考问题' },
+          { name: '团队管理', importance: 4, category: '团队模块', reason: '需要有效管理团队' },
+          { name: '沟通协调', importance: 4, category: '人际模块', reason: '需要协调各方资源' },
+        ],
+      };
+      
+      // Save scenario
+      const now = Math.floor(Date.now() / 1000);
+      const [scenario] = await db
+        .insert(schema.scenarios)
+        .values({
+          userId: user.id,
+          title: input.title,
+          description: input.description,
+          aiAnalysis: aiResult.analysis,
+          aiSuggestions: aiResult.suggestions,
+          identifiedCompetencies: JSON.stringify(aiResult.competencies),
+          companyStage: input.companyStage || 'seed',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning();
+      
+      return {
+        ...aiResult,
+        scenarioId: scenario.id,
+      };
+    }),
+  
+  /**
+   * Get user's all scenarios
+   */
+  list: protectedProcedure.query(async ({ ctx }) => {
+    const { db, user } = ctx;
+    
+    const scenarios = await db
+      .select()
+      .from(schema.scenarios)
+      .where(eq(schema.scenarios.userId, user.id))
+      .orderBy(desc(schema.scenarios.createdAt));
+    
+    return scenarios;
+  }),
+  
+  /**
+   * Get single scenario detail
+   */
+  get: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { db, user } = ctx;
+      
+      const [scenario] = await db
+        .select()
+        .from(schema.scenarios)
+        .where(and(
+          eq(schema.scenarios.id, input.id),
+          eq(schema.scenarios.userId, user.id)
+        ))
+        .limit(1);
+      
+      if (!scenario) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: '场景不存在',
+        });
+      }
+      
+      return scenario;
+    }),
+});
+
+/**
+ * Learning Router - 学习系统
+ */
+const learningRouter = router({
+  /**
+   * Generate personalized learning path
+   */
+  generatePath: protectedProcedure
+    .input(z.object({
+      competencyId: z.number(),
+      targetLevel: z.number().min(1).max(5),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { db, user } = ctx;
+      
+      // Get competency
+      const [competency] = await db
+        .select()
+        .from(schema.competencies)
+        .where(eq(schema.competencies.id, input.competencyId))
+        .limit(1);
+      
+      if (!competency) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: '能力不存在',
+        });
+      }
+      
+      // Get user's current level
+      const [userComp] = await db
+        .select()
+        .from(schema.competencyScores)
+        .where(and(
+          eq(schema.competencyScores.userId, user.id),
+          eq(schema.competencyScores.competencyId, input.competencyId)
+        ))
+        .limit(1);
+      
+      const currentLevel = userComp?.currentLevel || 1;
+      
+      if (currentLevel >= input.targetLevel) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: '您的当前能力等级已达到或超过目标等级',
+        });
+      }
+      
+      // Generate learning path (simplified - actual AI would generate this)
+      const pathData = {
+        title: `${competency.name}能力提升计划（L${currentLevel} → L${input.targetLevel}）`,
+        description: `这是一个为期${(input.targetLevel - currentLevel) * 2}个月的学习计划，旨在帮助您从L${currentLevel}提升到L${input.targetLevel}。`,
+        estimatedDuration: `${(input.targetLevel - currentLevel) * 2}个月`,
+        resources: [
+          {
+            title: `《${competency.name}实战指南》`,
+            type: 'book',
+            description: '系统介绍相关理论和实践案例',
+            url: '',
+            author: '管理大师',
+            platform: '得到',
+            difficulty: 'intermediate',
+            estimatedTime: '2周',
+          },
+          {
+            title: `${competency.name}在线课程`,
+            type: 'course',
+            description: '系统性的在线学习课程',
+            url: '',
+            author: '知名讲师',
+            platform: 'Coursera',
+            difficulty: 'intermediate',
+            estimatedTime: '4周',
+          },
+        ],
+      };
+      
+      // Save learning path
+      const now = Math.floor(Date.now() / 1000);
+      
+      // Create resource IDs array (simplified - in production would create resources first)
+      const resourceIds = pathData.resources.map((_, i) => i + 1).join(',');
+      
+      const [path] = await db
+        .insert(schema.learningPaths)
+        .values({
+          userId: user.id,
+          title: pathData.title,
+          description: pathData.description,
+          targetCompetencies: String(input.competencyId), // Store competency ID
+          resourceIds: resourceIds,
+          totalResources: pathData.resources.length,
+          completedResources: 0,
+          estimatedDays: (input.targetLevel - currentLevel) * 60, // ~2 months per level
+          status: 'active',
+          startedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning();
+      
+      // Note: learningResources table structure is different
+      // It's tied to competency, not to paths
+      // We'll skip creating individual resources for now since the schema doesn't match
+      
+      return {
+        pathId: path.id,
+        ...pathData,
+      };
+    }),
+  
+  /**
+   * Get user's learning paths
+   */
+  getMyPaths: protectedProcedure.query(async ({ ctx }) => {
+    const { db, user } = ctx;
+    
+    const paths = await db
+      .select()
+      .from(schema.learningPaths)
+      .where(eq(schema.learningPaths.userId, user.id))
+      .orderBy(desc(schema.learningPaths.createdAt));
+    
+    return paths;
+  }),
+  
+  /**
+   * Get learning path detail with resources and progress
+   */
+  getPathDetail: protectedProcedure
+    .input(z.object({
+      pathId: z.number(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { db, user } = ctx;
+      
+      // Get path
+      const [path] = await db
+        .select()
+        .from(schema.learningPaths)
+        .where(and(
+          eq(schema.learningPaths.id, input.pathId),
+          eq(schema.learningPaths.userId, user.id)
+        ))
+        .limit(1);
+      
+      if (!path) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: '学习路径不存在',
+        });
+      }
+      
+      // Get competency resources (note: different schema structure)
+      const competencyIds = path.targetCompetencies.split(',').map(Number);
+      const resources = await db
+        .select()
+        .from(schema.learningResources)
+        .where(sql`${schema.learningResources.competencyId} IN (${sql.join(competencyIds, sql`, `)})`);
+      
+      // Get progress for this path
+      const progressList = await db
+        .select()
+        .from(schema.userLearningProgress)
+        .where(and(
+          eq(schema.userLearningProgress.userId, user.id),
+          eq(schema.userLearningProgress.pathId, input.pathId)
+        ));
+      
+      // Merge resources with progress
+      const resourcesWithProgress = resources.map(resource => {
+        const progress = progressList.find(p => p.resourceId === resource.id);
+        return {
+          ...resource,
+          progress: progress ? {
+            status: progress.status,
+            progressPercent: progress.progressPercent,
+            timeSpent: progress.timeSpent,
+            notes: progress.notes,
+            completedAt: progress.completedAt,
+          } : {
+            status: 'not_started',
+            progressPercent: 0,
+            timeSpent: 0,
+          },
+        };
+      });
+      
+      return {
+        ...path,
+        resources: resourcesWithProgress,
+      };
+    }),
+  
+  /**
+   * Update learning progress
+   */
+  updateProgress: protectedProcedure
+    .input(z.object({
+      pathId: z.number(),
+      resourceId: z.number(),
+      status: z.enum(['not_started', 'in_progress', 'completed']).optional(),
+      progressPercent: z.number().min(0).max(100).optional(),
+      timeSpent: z.number().optional(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { db, user } = ctx;
+      
+      // Verify resource exists
+      const [resource] = await db
+        .select()
+        .from(schema.learningResources)
+        .where(eq(schema.learningResources.id, input.resourceId))
+        .limit(1);
+      
+      if (!resource) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: '学习资源不存在',
+        });
+      }
+      
+      // Check if progress exists
+      const [existing] = await db
+        .select()
+        .from(schema.userLearningProgress)
+        .where(and(
+          eq(schema.userLearningProgress.userId, user.id),
+          eq(schema.userLearningProgress.pathId, input.pathId),
+          eq(schema.userLearningProgress.resourceId, input.resourceId)
+        ))
+        .limit(1);
+      
+      const now = Math.floor(Date.now() / 1000);
+      
+      if (existing) {
+        // Update
+        const updateData: any = { updatedAt: now };
+        if (input.status) updateData.status = input.status;
+        if (input.progressPercent !== undefined) updateData.progressPercent = input.progressPercent;
+        if (input.timeSpent !== undefined) updateData.timeSpent = input.timeSpent;
+        if (input.notes !== undefined) updateData.notes = input.notes;
+        if (input.status === 'completed') updateData.completedAt = now;
+        
+        await db
+          .update(schema.userLearningProgress)
+          .set(updateData)
+          .where(eq(schema.userLearningProgress.id, existing.id));
+      } else {
+        // Create
+        await db.insert(schema.userLearningProgress).values({
+          userId: user.id,
+          pathId: input.pathId,
+          resourceId: input.resourceId,
+          status: input.status || 'not_started',
+          progressPercent: input.progressPercent || 0,
+          timeSpent: input.timeSpent || 0,
+          notes: input.notes || null,
+          startedAt: input.status === 'in_progress' ? now : null,
+          completedAt: input.status === 'completed' ? now : null,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      
+      // Update path completion count if resource completed
+      if (input.status === 'completed' && !existing) {
+        const [path] = await db
+          .select()
+          .from(schema.learningPaths)
+          .where(eq(schema.learningPaths.id, input.pathId))
+          .limit(1);
+        
+        if (path) {
+          await db
+            .update(schema.learningPaths)
+            .set({
+              completedResources: (path.completedResources || 0) + 1,
+              updatedAt: now,
+            })
+            .where(eq(schema.learningPaths.id, input.pathId));
+        }
+      }
+      
+      return { success: true };
+    }),
+});
+
+/**
+ * Achievements Router - 成就系统
+ */
+const achievementsRouter = router({
+  /**
+   * Get user's achievements
+   */
+  getUserAchievements: protectedProcedure.query(async ({ ctx }) => {
+    const { db, user } = ctx;
+    
+    const achievements = await db
+      .select()
+      .from(schema.userAchievements)
+      .where(eq(schema.userAchievements.userId, user.id))
+      .orderBy(desc(schema.userAchievements.unlockedAt));
+    
+    return achievements;
+  }),
+  
+  /**
+   * Get available achievements (not yet unlocked)
+   */
+  getAvailable: protectedProcedure.query(async ({ ctx }) => {
+    const { db, user } = ctx;
+    
+    // Get all possible achievements (simplified - would normally fetch from achievements table)
+    const possibleAchievements = [
+      { id: 'first_assessment', name: '首次评估', description: '完成第一次能力评估', icon: '🎯', points: 10 },
+      { id: 'first_scenario', name: '首次情境', description: '提交第一个管理情境', icon: '💼', points: 15 },
+      { id: 'first_learning_path', name: '学习启航', description: '创建第一个学习计划', icon: '📚', points: 20 },
+      { id: 'complete_5_resources', name: '勤学者', description: '完成5个学习资源', icon: '📖', points: 50 },
+      { id: 'level_up_3', name: '能力提升', description: '任意能力提升3级', icon: '⬆️', points: 100 },
+    ];
+    
+    // Get user's unlocked achievements
+    const unlocked = await db
+      .select()
+      .from(schema.userAchievements)
+      .where(eq(schema.userAchievements.userId, user.id));
+    
+    const unlockedIds = new Set(unlocked.map(a => a.achievementId));
+    
+    // Filter to only show available ones
+    const available = possibleAchievements.filter(a => !unlockedIds.has(a.id));
+    
+    return available;
+  }),
+  
+  /**
+   * Check and award achievements (called internally after user actions)
+   */
+  checkAndAward: protectedProcedure
+    .input(z.object({
+      trigger: z.string(), // e.g., 'assessment_completed', 'scenario_submitted'
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { db, user } = ctx;
+      
+      // Logic to check if achievements should be unlocked
+      // This is a simplified version
+      const newAchievements: string[] = [];
+      
+      if (input.trigger === 'assessment_completed') {
+        // Check if this is first assessment
+        const assessmentCount = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(schema.assessmentSessions)
+          .where(eq(schema.assessmentSessions.userId, user.id));
+        
+        if (assessmentCount[0]?.count === 1) {
+          newAchievements.push('first_assessment');
+        }
+      }
+      
+      // Award new achievements
+      const now = Math.floor(Date.now() / 1000);
+      for (const achievementId of newAchievements) {
+        await db.insert(schema.userAchievements).values({
+          userId: user.id,
+          achievementId,
+          unlockedAt: now,
+          createdAt: now,
+        });
+      }
+      
+      return {
+        newAchievements,
+      };
+    }),
+});
+
+/**
  * Main App Router
  * Combines all sub-routers
  */
@@ -860,10 +1359,10 @@ export const appRouter = router({
   organization: organizationRouter,
   industries: industriesRouter,
   positions: positionsRouter,
+  scenarios: scenariosRouter,
+  learning: learningRouter,
+  achievements: achievementsRouter,
   // TODO: Add more routers as needed:
-  // scenarios: scenariosRouter,
-  // learning: learningRouter,
-  // achievements: achievementsRouter,
   // wiki: wikiRouter,
   // feedback: feedbackRouter,
   // admin: adminRouter,
