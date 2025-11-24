@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Login</title>
+</head>
+<body>
+  <h1>测试登录功能</h1>
+  <button id="testLogin">测试 Demo CEO 登录</button>
+  <div id="result"></div>
+  
+  <script>
+    document.getElementById('testLogin').addEventListener('click', async () => {
+      const resultDiv = document.getElementById('result');
+      resultDiv.innerHTML = '<p>正在登录...</p>';
+      
+      try {
+        // 测试登录 API（tRPC 格式）
+        const response = await fetch('/api/trpc/auth.localLogin?batch=1', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            '0': {
+              json: {
+                username: 'demo_ceo',
+                password: 'demo123'
+              }
+            }
+          })
+        });
+        
+        const data = await response.json();
+        
+        resultDiv.innerHTML = `
+          <h3>响应：</h3>
+          <pre>${JSON.stringify(data, null, 2)}</pre>
+        `;
+        
+        // 如果成功，保存 token
+        if (data[0]?.result?.data?.json?.token) {
+          const token = data[0].result.data.json.token;
+          localStorage.setItem('auth_token', token);
+          resultDiv.innerHTML += '<p style="color: green;">✅ Token 已保存到 localStorage!</p>';
+        }
+      } catch (error) {
+        resultDiv.innerHTML = `<p style="color: red;">错误: ${error.message}</p>`;
+        console.error(error);
+      }
+    });
+  </script>
+</body>
+</html>
