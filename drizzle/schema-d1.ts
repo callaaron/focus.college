@@ -8,7 +8,7 @@ import { sql } from "drizzle-orm";
  * Key Changes:
  * - mysqlTable → sqliteTable
  * - int().autoincrement() → integer({ mode: 'number' }).primaryKey({ autoIncrement: true })
- * - timestamp() → integer({ mode: 'timestamp' })
+ * - timestamp() → integer({ mode: 'number' })
  * - mysqlEnum() → text() with check constraints or direct text storage
  * - varchar() → text()
  * - boolean() → integer({ mode: 'boolean' })
@@ -30,9 +30,9 @@ export const users = sqliteTable("users", {
   role: text("role", { enum: ["user", "admin"] }).default("user").notNull(),
   isDemo: integer("isDemo", { mode: 'boolean' }).default(false).notNull(),
   demoRole: text("demoRole"),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
-  updatedAt: integer("updatedAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
-  lastSignedIn: integer("lastSignedIn", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
+  updatedAt: integer("updatedAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
+  lastSignedIn: integer("lastSignedIn", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type User = typeof users.$inferSelect;
@@ -55,8 +55,8 @@ export const userProfiles = sqliteTable("userProfiles", {
   directReports: integer("directReports").default(0),
   teamSize: integer("teamSize").default(0),
   profileCompleted: integer("profileCompleted", { mode: 'boolean' }).default(false).notNull(),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
-  updatedAt: integer("updatedAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
+  updatedAt: integer("updatedAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type UserProfile = typeof userProfiles.$inferSelect;
@@ -69,7 +69,7 @@ export const competencyDomains = sqliteTable("competencyDomains", {
   name: text("name").notNull(),
   description: text("description"),
   sortOrder: integer("sortOrder").default(0),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type CompetencyDomain = typeof competencyDomains.$inferSelect;
@@ -84,7 +84,7 @@ export const competencies = sqliteTable("competencies", {
   description: text("description"),
   isCore: integer("isCore", { mode: 'boolean' }).default(true).notNull(),
   sortOrder: integer("sortOrder").default(0),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type Competency = typeof competencies.$inferSelect;
@@ -106,9 +106,9 @@ export const competencyScores = sqliteTable("competencyScores", {
   aiAnalysisWeight: integer("aiAnalysisWeight").default(30),
   evidenceWeight: integer("evidenceWeight").default(10),
   practiceCount: integer("practiceCount").default(0),
-  lastPracticeAt: integer("lastPracticeAt", { mode: 'timestamp' }),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
-  updatedAt: integer("updatedAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  lastPracticeAt: integer("lastPracticeAt", { mode: 'number' }),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
+  updatedAt: integer("updatedAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type CompetencyScore = typeof competencyScores.$inferSelect;
@@ -121,8 +121,8 @@ export const competencySnapshots = sqliteTable("competencySnapshots", {
   competencyId: integer("competencyId").notNull(),
   score: integer("score").notNull(),
   level: integer("level").notNull(),
-  snapshotDate: integer("snapshotDate", { mode: 'timestamp' }).notNull(),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  snapshotDate: integer("snapshotDate", { mode: 'number' }).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type CompetencySnapshot = typeof competencySnapshots.$inferSelect;
@@ -141,8 +141,8 @@ export const scenarios = sqliteTable("scenarios", {
   suggestions: text("suggestions"),
   relatedCompetencies: text("relatedCompetencies"),
   status: text("status", { enum: ["pending", "analyzed", "archived"] }).default("pending").notNull(),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
-  updatedAt: integer("updatedAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
+  updatedAt: integer("updatedAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type Scenario = typeof scenarios.$inferSelect;
@@ -172,8 +172,8 @@ export const assessmentQuestions = sqliteTable("assessmentQuestions", {
   correctRate: integer("correctRate").default(50),
   isActive: integer("isActive", { mode: 'boolean' }).default(true).notNull(),
   sortOrder: integer("sortOrder").default(0),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
-  updatedAt: integer("updatedAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
+  updatedAt: integer("updatedAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type AssessmentQuestion = typeof assessmentQuestions.$inferSelect;
@@ -187,9 +187,9 @@ export const assessmentSessions = sqliteTable("assessmentSessions", {
   totalQuestions: integer("totalQuestions").notNull(),
   answeredQuestions: integer("answeredQuestions").default(0),
   status: text("status", { enum: ["in_progress", "completed", "abandoned"] }).default("in_progress").notNull(),
-  startedAt: integer("startedAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
-  completedAt: integer("completedAt", { mode: 'timestamp' }),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  startedAt: integer("startedAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
+  completedAt: integer("completedAt", { mode: 'number' }),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type AssessmentSession = typeof assessmentSessions.$inferSelect;
@@ -204,7 +204,7 @@ export const userAnswers = sqliteTable("userAnswers", {
   competencyId: integer("competencyId").notNull(),
   answer: integer("answer").notNull(),
   score: integer("score").notNull(),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type UserAnswer = typeof userAnswers.$inferSelect;
@@ -217,7 +217,7 @@ export const industries = sqliteTable("industries", {
   code: text("code").notNull().unique(),
   description: text("description"),
   keyCharacteristics: text("keyCharacteristics"),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type Industry = typeof industries.$inferSelect;
@@ -232,7 +232,7 @@ export const positions = sqliteTable("positions", {
   level: text("level", { enum: ["executive", "senior", "middle", "junior"] }).notNull(),
   description: text("description"),
   keyResponsibilities: text("keyResponsibilities"),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type Position = typeof positions.$inferSelect;
@@ -245,7 +245,7 @@ export const industryCompetencies = sqliteTable("industryCompetencies", {
   competencyId: integer("competencyId").notNull(),
   importance: integer("importance").default(3).notNull(),
   description: text("description"),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type IndustryCompetency = typeof industryCompetencies.$inferSelect;
@@ -259,7 +259,7 @@ export const positionCompetencies = sqliteTable("positionCompetencies", {
   importance: integer("importance").default(3).notNull(),
   requiredLevel: integer("requiredLevel").default(3).notNull(),
   description: text("description"),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type PositionCompetency = typeof positionCompetencies.$inferSelect;
@@ -275,7 +275,7 @@ export const learningResources = sqliteTable("learningResources", {
   description: text("description"),
   difficulty: text("difficulty", { enum: ["beginner", "intermediate", "advanced"] }).default("intermediate"),
   estimatedTime: integer("estimatedTime"),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type LearningResource = typeof learningResources.$inferSelect;
@@ -293,10 +293,10 @@ export const learningPaths = sqliteTable("learningPaths", {
   completedResources: integer("completedResources").default(0),
   estimatedDays: integer("estimatedDays").default(30),
   status: text("status", { enum: ["active", "completed", "paused"] }).default("active").notNull(),
-  startedAt: integer("startedAt", { mode: 'timestamp' }),
-  completedAt: integer("completedAt", { mode: 'timestamp' }),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
-  updatedAt: integer("updatedAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  startedAt: integer("startedAt", { mode: 'number' }),
+  completedAt: integer("completedAt", { mode: 'number' }),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
+  updatedAt: integer("updatedAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type LearningPath = typeof learningPaths.$inferSelect;
@@ -313,10 +313,10 @@ export const userLearningProgress = sqliteTable("userLearningProgress", {
   timeSpent: integer("timeSpent").default(0),
   notes: text("notes"),
   rating: integer("rating"),
-  startedAt: integer("startedAt", { mode: 'timestamp' }),
-  completedAt: integer("completedAt", { mode: 'timestamp' }),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
-  updatedAt: integer("updatedAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  startedAt: integer("startedAt", { mode: 'number' }),
+  completedAt: integer("completedAt", { mode: 'number' }),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
+  updatedAt: integer("updatedAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type UserLearningProgress = typeof userLearningProgress.$inferSelect;
@@ -333,7 +333,7 @@ export const achievements = sqliteTable("achievements", {
   condition: text("condition").notNull(),
   points: integer("points").default(10),
   sortOrder: integer("sortOrder").default(0),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type Achievement = typeof achievements.$inferSelect;
@@ -344,9 +344,9 @@ export const userAchievements = sqliteTable("userAchievements", {
   id: integer("id", { mode: 'number' }).primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
   achievementId: integer("achievementId").notNull(),
-  unlockedAt: integer("unlockedAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  unlockedAt: integer("unlockedAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
   progress: integer("progress").default(0),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type UserAchievement = typeof userAchievements.$inferSelect;
@@ -365,8 +365,8 @@ export const companies = sqliteTable("companies", {
   description: text("description"),
   organizationStructure: text("organizationStructure"),
   ownerId: integer("ownerId").notNull(),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
-  updatedAt: integer("updatedAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
+  updatedAt: integer("updatedAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type Company = typeof companies.$inferSelect;
@@ -379,8 +379,8 @@ export const companyMembers = sqliteTable("companyMembers", {
   userId: integer("userId").notNull(),
   role: text("role", { enum: ["owner", "admin", "member"] }).default("member").notNull(),
   position: text("position"),
-  joinedAt: integer("joinedAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  joinedAt: integer("joinedAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type CompanyMember = typeof companyMembers.$inferSelect;
@@ -396,8 +396,8 @@ export const demoAccounts = sqliteTable("demoAccounts", {
   description: text("description"),
   userId: integer("userId"),
   isActive: integer("isActive", { mode: 'boolean' }).default(true).notNull(),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
-  updatedAt: integer("updatedAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
+  updatedAt: integer("updatedAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type DemoAccount = typeof demoAccounts.$inferSelect;
@@ -412,8 +412,8 @@ export const demoAccountAnalytics = sqliteTable("demoAccountAnalytics", {
   pageViews: integer("pageViews").default(0),
   duration: integer("duration").default(0),
   visitedPages: text("visitedPages"),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
-  updatedAt: integer("updatedAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
+  updatedAt: integer("updatedAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type DemoAccountAnalytics = typeof demoAccountAnalytics.$inferSelect;
@@ -426,7 +426,7 @@ export const wikiCategories = sqliteTable("wikiCategories", {
   slug: text("slug").notNull().unique(),
   description: text("description"),
   sortOrder: integer("sortOrder").default(0),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type WikiCategory = typeof wikiCategories.$inferSelect;
@@ -443,8 +443,8 @@ export const wikiArticles = sqliteTable("wikiArticles", {
   tags: text("tags"),
   sortOrder: integer("sortOrder").default(0),
   viewCount: integer("viewCount").default(0),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
-  updatedAt: integer("updatedAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
+  updatedAt: integer("updatedAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type WikiArticle = typeof wikiArticles.$inferSelect;
@@ -458,7 +458,7 @@ export const feedbacks = sqliteTable("feedbacks", {
   title: text("title").notNull(),
   content: text("content").notNull(),
   status: text("status", { enum: ["pending", "reviewed", "resolved"] }).default("pending").notNull(),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type Feedback = typeof feedbacks.$inferSelect;
@@ -471,8 +471,8 @@ export const changelogs = sqliteTable("changelogs", {
   title: text("title").notNull(),
   content: text("content").notNull(),
   type: text("type", { enum: ["feature", "improvement", "bugfix"] }).notNull(),
-  publishedAt: integer("publishedAt", { mode: 'timestamp' }).notNull(),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  publishedAt: integer("publishedAt", { mode: 'number' }).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type Changelog = typeof changelogs.$inferSelect;
@@ -488,8 +488,8 @@ export const organizationAssessments = sqliteTable("organizationAssessments", {
   organizationScore: integer("organizationScore").default(0).notNull(),
   innovationScore: integer("innovationScore").default(0).notNull(),
   detailedScores: text("detailedScores"),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
-  updatedAt: integer("updatedAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
+  updatedAt: integer("updatedAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type OrganizationAssessment = typeof organizationAssessments.$inferSelect;
@@ -505,8 +505,8 @@ export const organizationAssessmentHistory = sqliteTable("organizationAssessment
   innovationScore: integer("innovationScore").notNull(),
   questionAnswers: text("questionAnswers"),
   metricValues: text("metricValues"),
-  assessmentDate: integer("assessmentDate", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
-  createdAt: integer("createdAt", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
+  assessmentDate: integer("assessmentDate", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
+  createdAt: integer("createdAt", { mode: 'number' }).default(sql`(unixepoch())`).notNull(),
 });
 
 export type OrganizationAssessmentHistory = typeof organizationAssessmentHistory.$inferSelect;
