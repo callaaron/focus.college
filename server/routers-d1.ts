@@ -1803,6 +1803,30 @@ const adminRouter = router({
       },
     };
   }),
+  
+  /**
+   * Get all users without pagination (for compatibility with routers.ts)
+   */
+  getAllUsers: adminProcedure.query(async ({ ctx }) => {
+    const { db } = ctx;
+    
+    const users = await db
+      .select()
+      .from(schema.users)
+      .orderBy(desc(schema.users.createdAt));
+    
+    return users.map(u => ({
+      id: u.id,
+      username: u.username,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      isDemo: u.isDemo,
+      createdAt: u.createdAt,
+      lastSignedIn: u.lastSignedIn,
+      demoRole: u.demoRole,
+    }));
+  }),
 });
 
 /**
@@ -1816,7 +1840,9 @@ export const appRouter = router({
   competencies: competenciesRouter,
   organization: organizationRouter,
   industries: industriesRouter,
+  industry: industriesRouter,  // Alias for consistency with routers.ts
   positions: positionsRouter,
+  position: positionsRouter,    // Alias for consistency with routers.ts
   scenarios: scenariosRouter,
   learning: learningRouter,
   achievements: achievementsRouter,

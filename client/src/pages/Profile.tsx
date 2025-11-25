@@ -89,7 +89,7 @@ export default function Profile() {
   const { data: completion, refetch: refetchCompletion } = trpc.profile.getCompletion.useQuery();
   
   // Fetch industries list
-  const { data: industries, isLoading: industriesLoading } = trpc.industry.list.useQuery();
+  const { data: industries, isLoading: industriesLoading } = trpc.industries.list.useQuery();
 
   // Mutations
   const createProfile = trpc.profile.create.useMutation();
