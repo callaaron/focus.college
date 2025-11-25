@@ -4277,6 +4277,23 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
         return await wikiDb.getAllWikiArticlesWithCategory();
       }),
   }),
+  
+  // Aliases for consistency with routers-d1.ts (plural forms)
+  industries: router({
+    list: publicProcedure.query(async () => {
+      const database = await db.getDb();
+      if (!database) return [];
+      return await database.select().from(industries).orderBy(industries.name);
+    }),
+    get: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const database = await db.getDb();
+        if (!database) return null;
+        const [industry] = await database.select().from(industries).where(eq(industries.id, input.id)).limit(1);
+        return industry || null;
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
