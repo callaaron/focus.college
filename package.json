@@ -12,6 +12,8 @@
     "start": "NODE_ENV=production node dist/index.js",
     "preview": "wrangler pages dev dist --d1=DB",
     "deploy": "npm run build && wrangler pages deploy dist",
+    "deploy:quick": "bash scripts/quick-deploy.sh",
+    "deploy:direct": "bash scripts/direct-deploy.sh",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
