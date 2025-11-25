@@ -18,10 +18,9 @@ import {
   Lightbulb
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export default function Challenge() {
-  const { toast } = useToast();
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
 
@@ -47,30 +46,20 @@ export default function Challenge() {
   const submitAnswerMutation = trpc.challenges.submitAnswer.useMutation({
     onSuccess: (data) => {
       setShowResult(true);
-      toast({
-        title: data.isCorrect ? "回答正确！🎉" : "回答错误",
-        description: data.isCorrect 
-          ? `恭喜您获得 ${data.pointsEarned} 积分！` 
-          : "继续加油，下次一定能答对！",
-        variant: data.isCorrect ? "default" : "destructive",
-      });
+      if (data.isCorrect) {
+        toast.success(`回答正确！🎉 恭喜您获得 ${data.pointsEarned} 积分！`);
+      } else {
+        toast.error("回答错误，继续加油，下次一定能答对！");
+      }
     },
     onError: (error) => {
-      toast({
-        title: "提交失败",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast.error(`提交失败: ${error.message}`);
     }
   });
 
   const handleSubmitAnswer = () => {
     if (selectedAnswer === null || !dailyChallenge) {
-      toast({
-        title: "请选择答案",
-        description: "请先选择一个答案选项",
-        variant: "destructive",
-      });
+      toast.error("请先选择一个答案选项");
       return;
     }
 
