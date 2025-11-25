@@ -2859,6 +2859,65 @@ ${gapSummary}
         return { sessionId };
       }),
     
+    // 获取评估会话的题目
+    getSessionQuestions: protectedProcedure
+      .input(z.object({
+        sessionId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        // Get session info
+        const database = await db.getDb();
+        if (!database) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: '数据库连接失败',
+          });
+        }
+        
+        const [session] = await database
+          .select()
+          .from(assessmentSessions)
+          .where(eq(assessmentSessions.id, input.sessionId))
+          .limit(1);
+        
+        if (!session) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: '评估会话不存在',
+          });
+        }
+        
+        if (session.userId !== ctx.user.id) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: '无权访问此评估会话',
+          });
+        }
+        
+        // Get questions for this session type
+        const questions = await database
+          .select()
+          .from(assessmentQuestions)
+          .limit(session.totalQuestions);
+        
+        // Get user's answers for this session
+        const answers = await database
+          .select()
+          .from(userAnswers)
+          .where(eq(userAnswers.userId, ctx.user.id));
+        
+        return {
+          session,
+          questions,
+          answers,
+          progress: {
+            total: session.totalQuestions,
+            completed: session.completedQuestions,
+            percentage: Math.round((session.completedQuestions / session.totalQuestions) * 100),
+          },
+        };
+      }),
+    
     // 临时调试API：获取所有能力名称
     getAllCompetencyNames: publicProcedure
       .query(async () => {
