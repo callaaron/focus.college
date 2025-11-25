@@ -1902,6 +1902,14 @@ export const appRouter = router({
   learning: learningRouter,
   achievements: achievementsRouter,
   admin: adminRouter,
+  
+  // Frontend compatibility aliases (fixing 404 errors)
+  user: profileRouter,                        // user.* → profile.*
+  users: profileRouter,                       // users.* → profile.*
+  organizationAssessment: organizationRouter, // organizationAssessment.* → organization.*
+  learningPaths: learningRouter,              // learningPaths.* → learning.*
+  questions: assessmentRouter,                // questions.* → assessment.* (contains question-related procedures)
+  
   // TODO: Add more routers as needed:
   // wiki: wikiRouter,
   // feedback: feedbackRouter,

@@ -4353,6 +4353,48 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
         return industry || null;
       }),
   }),
+  
+  // Frontend compatibility aliases (fixing 404 errors)
+  // Note: routers.ts already has inline definitions for organizationAssessment, learningPaths, questions
+  // We only need to add user/users aliases here
+  user: router({
+    getProfile: protectedProcedure.query(async ({ ctx }) => {
+      const database = await db.getDb();
+      if (!database) return null;
+      // Redirect to profile.get
+      const userId = ctx.user?.id;
+      if (!userId) return null;
+      const profiles = await database.select().from(db.userProfiles).where(eq(db.userProfiles.userId, userId)).limit(1);
+      return profiles[0] || null;
+    }),
+  }),
+  users: router({
+    getProfile: protectedProcedure.query(async ({ ctx }) => {
+      const database = await db.getDb();
+      if (!database) return null;
+      // Redirect to profile.get
+      const userId = ctx.user?.id;
+      if (!userId) return null;
+      const profiles = await database.select().from(db.userProfiles).where(eq(db.userProfiles.userId, userId)).limit(1);
+      return profiles[0] || null;
+    }),
+    getProfileCompletion: protectedProcedure.query(async ({ ctx }) => {
+      const database = await db.getDb();
+      if (!database) return { completionRate: 0, missingFields: [] };
+      const userId = ctx.user?.id;
+      if (!userId) return { completionRate: 0, missingFields: [] };
+      
+      const profiles = await database.select().from(db.userProfiles).where(eq(db.userProfiles.userId, userId)).limit(1);
+      const profile = profiles[0];
+      if (!profile) return { completionRate: 0, missingFields: ['all'] };
+      
+      const requiredFields = ['industry', 'currentRole', 'managementLevel', 'yearsOfManagement'];
+      const missingFields = requiredFields.filter(field => !profile[field as keyof typeof profile]);
+      const completionRate = ((requiredFields.length - missingFields.length) / requiredFields.length) * 100;
+      
+      return { completionRate, missingFields };
+    }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
