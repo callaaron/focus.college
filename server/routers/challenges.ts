@@ -12,8 +12,8 @@ import {
   userChallenges, 
   dailyChallenges, 
   userPoints,
-  achievements,
-  userAchievements 
+  challengeAchievements,
+  userChallengeAchievements 
 } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 

@@ -19,6 +19,7 @@ const Assessment = lazy(() => import("./pages/Assessment"));
 const AssessmentQuestionnaire = lazy(() => import("./pages/AssessmentQuestionnaire"));
 const AssessmentResults = lazy(() => import("./pages/AssessmentResults"));
 const Challenge = lazy(() => import("./pages/Challenge"));
+const Achievements = lazy(() => import("./pages/Achievements"));
 const Analysis = lazy(() => import("./pages/Analysis"));
 const Growth = lazy(() => import("./pages/Growth"));
 const ChangePassword = lazy(() => import("./pages/ChangePassword"));
@@ -50,6 +51,7 @@ function Router() {
         <Route path={"/assessment/questionnaire/:sessionId"} component={AssessmentQuestionnaire} />
         <Route path={"/assessment/results/:sessionId"} component={AssessmentResults} />
         <Route path={"/challenge"} component={Challenge} />
+        <Route path={"/achievements"} component={Achievements} />
         <Route path={"/analysis"} component={Analysis} />
         <Route path={"/growth"} component={Growth} />
         <Route path={"/company"} component={CompanyDashboard} />
