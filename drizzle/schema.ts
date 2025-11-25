@@ -518,3 +518,102 @@ export const organizationAssessmentHistory = mysqlTable("organizationAssessmentH
 
 export type OrganizationAssessmentHistory = typeof organizationAssessmentHistory.$inferSelect;
 export type InsertOrganizationAssessmentHistory = typeof organizationAssessmentHistory.$inferInsert;
+
+// ==================== 挑战系统表 ====================
+
+// 挑战题目表
+export const challenges = mysqlTable("challenges", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  scenario: text("scenario").notNull(), // JSON: {context, question}
+  options: text("options").notNull(), // JSON: [{text, explanation}]
+  correctAnswer: int("correctAnswer").notNull(), // 1-4
+  difficulty: mysqlEnum("difficulty", ["easy", "medium", "hard"]).default("medium").notNull(),
+  category: varchar("category", { length: 100 }), // 能力类别
+  points: int("points").default(10).notNull(),
+  explanation: text("explanation"), // 正确答案解释
+  competencyId: int("competencyId"), // 关联的能力ID
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Challenge = typeof challenges.$inferSelect;
+export type InsertChallenge = typeof challenges.$inferInsert;
+
+// 用户挑战记录表
+export const userChallenges = mysqlTable("userChallenges", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  challengeId: int("challengeId").notNull(),
+  isCorrect: boolean("isCorrect").notNull(),
+  selectedAnswer: int("selectedAnswer").notNull(),
+  pointsEarned: int("pointsEarned").default(0).notNull(),
+  timeSpent: int("timeSpent"), // 答题耗时（秒）
+  completedAt: timestamp("completedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type UserChallenge = typeof userChallenges.$inferSelect;
+export type InsertUserChallenge = typeof userChallenges.$inferInsert;
+
+// 每日挑战分配表
+export const dailyChallenges = mysqlTable("dailyChallenges", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  challengeId: int("challengeId").notNull(),
+  assignedDate: varchar("assignedDate", { length: 10 }).notNull(), // YYYY-MM-DD
+  isCompleted: boolean("isCompleted").default(false).notNull(),
+  completedAt: timestamp("completedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type DailyChallenge = typeof dailyChallenges.$inferSelect;
+export type InsertDailyChallenge = typeof dailyChallenges.$inferInsert;
+
+// 用户积分统计表
+export const userPoints = mysqlTable("userPoints", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  totalPoints: int("totalPoints").default(0).notNull(),
+  currentStreak: int("currentStreak").default(0).notNull(),
+  longestStreak: int("longestStreak").default(0).notNull(),
+  totalChallenges: int("totalChallenges").default(0).notNull(),
+  correctCount: int("correctCount").default(0).notNull(),
+  lastCompletedDate: varchar("lastCompletedDate", { length: 10 }), // YYYY-MM-DD
+  rank: int("rank"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type UserPoints = typeof userPoints.$inferSelect;
+export type InsertUserPoints = typeof userPoints.$inferInsert;
+
+// 成就定义表（挑战系统专用）
+export const challengeAchievements = mysqlTable("challengeAchievements", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description").notNull(),
+  icon: varchar("icon", { length: 50 }),
+  category: mysqlEnum("category", ["streak", "count", "accuracy", "special"]).notNull(),
+  requirement: int("requirement").notNull(), // 达成条件（数值）
+  points: int("points").default(0).notNull(),
+  rarity: mysqlEnum("rarity", ["common", "rare", "epic", "legendary"]).default("common").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ChallengeAchievement = typeof challengeAchievements.$inferSelect;
+export type InsertChallengeAchievement = typeof challengeAchievements.$inferInsert;
+
+// 用户成就解锁表（挑战系统专用）
+export const userChallengeAchievements = mysqlTable("userChallengeAchievements", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  achievementId: int("achievementId").notNull(),
+  unlockedAt: timestamp("unlockedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type UserChallengeAchievement = typeof userChallengeAchievements.$inferSelect;
+export type InsertUserChallengeAchievement = typeof userChallengeAchievements.$inferInsert;
