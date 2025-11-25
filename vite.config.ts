@@ -24,6 +24,73 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // Optimization settings
+    rollupOptions: {
+      output: {
+        // Manual chunking for better caching
+        manualChunks: (id) => {
+          // Vendor chunks
+          if (id.includes('node_modules')) {
+            // React core
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'vendor-react';
+            }
+            // Router
+            if (id.includes('wouter')) {
+              return 'vendor-router';
+            }
+            // Query
+            if (id.includes('@tanstack/react-query')) {
+              return 'vendor-query';
+            }
+            // tRPC
+            if (id.includes('@trpc')) {
+              return 'vendor-trpc';
+            }
+            // Recharts (large chart library)
+            if (id.includes('recharts')) {
+              return 'vendor-charts';
+            }
+            // UI libraries
+            if (id.includes('framer-motion') || id.includes('lucide-react')) {
+              return 'vendor-ui';
+            }
+            // Radix UI components
+            if (id.includes('@radix-ui')) {
+              return 'ui-components';
+            }
+            // All other node_modules
+            return 'vendor';
+          }
+        },
+        // Asset file naming for better caching
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+      },
+    },
+    // Minification settings
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true, // Remove console.logs in production
+        drop_debugger: true,
+        pure_funcs: ['console.log', 'console.info', 'console.debug'],
+      },
+      format: {
+        comments: false, // Remove comments
+      },
+    },
+    // Source map for production debugging (can disable for smaller builds)
+    sourcemap: false,
+    // Chunk size warnings
+    chunkSizeWarningLimit: 600,
+    // CSS code splitting
+    cssCodeSplit: true,
+    // Report compressed size
+    reportCompressedSize: true,
+    // Target modern browsers for smaller bundle
+    target: 'es2020',
   },
   server: {
     host: true,

@@ -7,7 +7,34 @@ import superjson from "superjson";
 import App from "./App";
 import "./index.css";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Data remains fresh for 5 minutes
+      staleTime: 5 * 60 * 1000,
+      // Cache data for 10 minutes
+      gcTime: 10 * 60 * 1000,
+      // Retry failed requests only once
+      retry: 1,
+      // Retry delay
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+      // Don't refetch on window focus for better performance
+      refetchOnWindowFocus: false,
+      // Don't refetch on mount if data is still fresh
+      refetchOnMount: false,
+      // Don't refetch when network reconnects
+      refetchOnReconnect: false,
+      // Network mode - online only for better UX
+      networkMode: 'online',
+    },
+    mutations: {
+      // Retry mutations once
+      retry: 1,
+      // Network mode
+      networkMode: 'online',
+    },
+  },
+});
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
@@ -44,17 +71,23 @@ const trpcClient = trpc.createClient({
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
-      fetch(input, init) {
+      // Batch multiple requests together for better performance
+      maxURLLength: 2083, // Maximum URL length for batching
+      // Headers configuration
+      headers() {
         // Get auth token from localStorage
         const token = localStorage.getItem('auth_token');
-        
+        return {
+          // Add Authorization header if token exists
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        };
+      },
+      fetch(input, init) {
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",
           headers: {
             ...(init?.headers || {}),
-            // Add Authorization header if token exists
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         });
       },

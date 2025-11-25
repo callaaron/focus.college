@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,14 +13,19 @@ import {
   TrendingUp,
   AlertCircle,
   PlayCircle,
-  FileText
+  FileText,
+  Loader2
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageSkeleton } from "@/components/PageSkeleton";
+import { FastListSkeleton } from "@/components/FastSkeleton";
 import { PageTransition, FadeInUp, StaggerContainer, StaggerItem } from "@/components/PageTransition";
+import { toast } from "sonner";
 
 export default function Assessment() {
+  const [, setLocation] = useLocation();
   const [selectedType, setSelectedType] = useState<"initial" | "regular" | "position" | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
 
   // Fetch user profile to check completion
   const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery();
@@ -27,6 +33,38 @@ export default function Assessment() {
   
   // Fetch competencies
   const { data: competencies, isLoading: competenciesLoading } = trpc.competencies.myProgress.useQuery();
+
+  // Start session mutation
+  const startSessionMutation = trpc.assessment.startSession.useMutation({
+    onSuccess: (data) => {
+      toast.success("评估会话已创建，正在跳转...");
+      setTimeout(() => {
+        setLocation(`/assessment/questionnaire/${data.sessionId}`);
+      }, 500);
+    },
+    onError: (error) => {
+      toast.error(error.message || "创建评估会话失败，请重试");
+      setIsStarting(false);
+    },
+  });
+
+  const handleStartAssessment = async (type: "initial" | "regular" | "position") => {
+    setSelectedType(type);
+    setIsStarting(true);
+    
+    // Determine number of questions based on type
+    const totalQuestions = type === "initial" ? 49 : type === "regular" ? 35 : 25;
+    
+    try {
+      await startSessionMutation.mutateAsync({
+        sessionType: type,
+        totalQuestions,
+      });
+    } catch (error) {
+      // Error already handled in mutation callback
+      setIsStarting(false);
+    }
+  };
 
   // Calculate completion stats
   const totalCompetencies = competencies?.length || 0;
@@ -157,11 +195,20 @@ export default function Assessment() {
               </div>
               <Button 
                 className="w-full" 
-                disabled={profileIncomplete}
-                onClick={() => setSelectedType("initial")}
+                disabled={profileIncomplete || isStarting}
+                onClick={() => handleStartAssessment("initial")}
               >
-                <PlayCircle className="mr-2 h-4 w-4" />
-                开始评估
+                {isStarting && selectedType === "initial" ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    启动中...
+                  </>
+                ) : (
+                  <>
+                    <PlayCircle className="mr-2 h-4 w-4" />
+                    开始评估
+                  </>
+                )}
               </Button>
             </CardContent>
           </Card>
@@ -197,11 +244,20 @@ export default function Assessment() {
               <Button 
                 className="w-full" 
                 variant="outline"
-                disabled={profileIncomplete}
-                onClick={() => setSelectedType("regular")}
+                disabled={profileIncomplete || isStarting}
+                onClick={() => handleStartAssessment("regular")}
               >
-                <PlayCircle className="mr-2 h-4 w-4" />
-                开始评估
+                {isStarting && selectedType === "regular" ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    启动中...
+                  </>
+                ) : (
+                  <>
+                    <PlayCircle className="mr-2 h-4 w-4" />
+                    开始评估
+                  </>
+                )}
               </Button>
             </CardContent>
           </Card>
@@ -237,67 +293,71 @@ export default function Assessment() {
               <Button 
                 className="w-full" 
                 variant="outline"
-                disabled={profileIncomplete || !profile?.currentRole}
-                onClick={() => setSelectedType("position")}
+                disabled={profileIncomplete || !profile?.currentRole || isStarting}
+                onClick={() => handleStartAssessment("position")}
               >
-                <PlayCircle className="mr-2 h-4 w-4" />
-                开始评估
+                {isStarting && selectedType === "position" ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    启动中...
+                  </>
+                ) : (
+                  <>
+                    <PlayCircle className="mr-2 h-4 w-4" />
+                    开始评估
+                  </>
+                )}
               </Button>
             </CardContent>
           </Card>
         </div>
 
-        {/* Coming Soon Notice */}
-        <Card className="bg-muted/50">
+        {/* Recent Assessment History */}
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5" />
-              评估问卷系统开发中
+              <Clock className="h-5 w-5" />
+              评估历史
             </CardTitle>
             <CardDescription>
-              我们正在构建科学、全面的能力评估问卷系统。系统将包含：
+              您最近的评估记录
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <h4 className="font-medium flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  已完成功能
-                </h4>
-                <ul className="text-sm text-muted-foreground space-y-1 ml-6">
-                  <li>• 能力数据模型（8大维度，35项能力）</li>
-                  <li>• 用户画像系统</li>
-                  <li>• 行业和职位库</li>
-                  <li>• 能力看板可视化</li>
-                </ul>
-              </div>
-              <div className="space-y-2">
-                <h4 className="font-medium flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-orange-600" />
-                  开发中功能
-                </h4>
-                <ul className="text-sm text-muted-foreground space-y-1 ml-6">
-                  <li>• 49道评估题目设计与录入</li>
-                  <li>• 智能评分算法</li>
-                  <li>• AI辅助分析</li>
-                  <li>• 个性化推荐引擎</li>
-                </ul>
-              </div>
+            <div className="text-center py-8 text-muted-foreground">
+              <ClipboardList className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>暂无评估记录</p>
+              <p className="text-sm mt-2">开始您的第一次评估吧！</p>
             </div>
-            <div className="mt-6 p-4 bg-background rounded-lg border">
-              <p className="text-sm text-muted-foreground">
-                <strong>替代方案：</strong> 
-                在评估问卷完成前，您可以使用「综合分析」功能，上传您的工作文档（会议记录、项目总结等），
-                系统将使用AI分析您在各个维度的能力表现，并给出专业评估。
-              </p>
-              <Button 
-                variant="link" 
-                className="mt-2 h-auto p-0"
-                onClick={() => window.location.href = '/analysis'}
-              >
-                前往综合分析 →
-              </Button>
+          </CardContent>
+        </Card>
+
+        {/* Assessment Tips */}
+        <Card className="bg-blue-50/50 border-blue-200">
+          <CardHeader>
+            <CardTitle className="text-blue-900 flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              评估小贴士
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3 text-sm text-blue-700">
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <p>评估过程中请根据您的<strong>实际情况</strong>作答，没有对错之分</p>
+              </div>
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <p>建议选择<strong>安静的环境</strong>，集中精力完成评估</p>
+              </div>
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <p>评估结果将帮助系统为您推荐<strong>个性化的成长路径</strong></p>
+              </div>
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <p>可以随时<strong>暂停和继续</strong>，您的答案会自动保存</p>
+              </div>
             </div>
           </CardContent>
         </Card>

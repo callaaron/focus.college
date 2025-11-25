@@ -668,6 +668,180 @@ const assessmentRouter = router({
     
     return scores;
   }),
+
+  /**
+   * Get questions for a specific session with proper ordering
+   */
+  getSessionQuestions: protectedProcedure
+    .input(z.object({
+      sessionId: z.number(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { db, user } = ctx;
+      
+      // Verify session belongs to user
+      const [session] = await db
+        .select()
+        .from(schema.assessmentSessions)
+        .where(
+          and(
+            eq(schema.assessmentSessions.id, input.sessionId),
+            eq(schema.assessmentSessions.userId, user.id)
+          )
+        )
+        .limit(1);
+      
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: '评估会话不存在',
+        });
+      }
+      
+      // Get all questions (49 questions)
+      const questions = await db
+        .select()
+        .from(schema.assessmentQuestions)
+        .where(eq(schema.assessmentQuestions.isActive, true))
+        .orderBy(schema.assessmentQuestions.id);
+      
+      // Get user's answers for this session
+      const answers = await db
+        .select()
+        .from(schema.userAnswers)
+        .where(
+          and(
+            eq(schema.userAnswers.userId, user.id),
+            eq(schema.userAnswers.sessionId, input.sessionId)
+          )
+        );
+      
+      // Map answers by question ID
+      const answerMap = new Map(answers.map(a => [a.questionId, a.answer]));
+      
+      // Add user's answer to each question if exists
+      const questionsWithAnswers = questions.map(q => ({
+        ...q,
+        userAnswer: answerMap.get(q.id) || null,
+      }));
+      
+      return {
+        session,
+        questions: questionsWithAnswers,
+        totalQuestions: questions.length,
+        answeredCount: answers.length,
+      };
+    }),
+
+  /**
+   * Get assessment results with detailed breakdown
+   */
+  getResults: protectedProcedure
+    .input(z.object({
+      sessionId: z.number(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { db, user } = ctx;
+      
+      // Verify session belongs to user and is completed
+      const [session] = await db
+        .select()
+        .from(schema.assessmentSessions)
+        .where(
+          and(
+            eq(schema.assessmentSessions.id, input.sessionId),
+            eq(schema.assessmentSessions.userId, user.id)
+          )
+        )
+        .limit(1);
+      
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: '评估会话不存在',
+        });
+      }
+      
+      // Get all answers for this session
+      const answers = await db
+        .select()
+        .from(schema.userAnswers)
+        .where(eq(schema.userAnswers.sessionId, input.sessionId));
+      
+      // Calculate scores by competency
+      const competencyScoreMap = new Map<number, { total: number; count: number }>();
+      
+      for (const answer of answers) {
+        const existing = competencyScoreMap.get(answer.competencyId) || { total: 0, count: 0 };
+        existing.total += answer.score;
+        existing.count += 1;
+        competencyScoreMap.set(answer.competencyId, existing);
+      }
+      
+      // Get competency details
+      const competencies = await db
+        .select()
+        .from(schema.competencies)
+        .orderBy(schema.competencies.sortOrder);
+      
+      // Get competency domains for category grouping
+      const domains = await db
+        .select()
+        .from(schema.competencyDomains)
+        .orderBy(schema.competencyDomains.sortOrder);
+      
+      // Calculate average by competency
+      const competencyResults = competencies.map(comp => {
+        const scoreData = competencyScoreMap.get(comp.id);
+        const avgScore = scoreData ? Math.round(scoreData.total / scoreData.count) : 0;
+        const level = avgScore > 0 ? Math.min(5, Math.floor(avgScore / 20) + 1) : 0;
+        
+        return {
+          competencyId: comp.id,
+          competencyName: comp.name,
+          category: comp.category,
+          domainId: comp.domainId,
+          avgScore,
+          level,
+          questionCount: scoreData?.count || 0,
+        };
+      }).filter(r => r.questionCount > 0); // Only include competencies with answers
+      
+      // Group by category (domain module)
+      const categoryScores = new Map<string, { total: number; count: number }>();
+      for (const result of competencyResults) {
+        const domain = domains.find(d => d.id === result.domainId);
+        const module = domain?.module || '其他';
+        
+        const existing = categoryScores.get(module) || { total: 0, count: 0 };
+        existing.total += result.avgScore;
+        existing.count += 1;
+        categoryScores.set(module, existing);
+      }
+      
+      // Calculate category averages
+      const categoryResults = Array.from(categoryScores.entries()).map(([category, data]) => ({
+        category,
+        avgScore: Math.round(data.total / data.count),
+        level: Math.min(5, Math.floor(data.total / data.count / 20) + 1),
+      }));
+      
+      // Calculate overall score
+      const totalScore = competencyResults.reduce((sum, r) => sum + r.avgScore, 0);
+      const overallScore = competencyResults.length > 0 
+        ? Math.round(totalScore / competencyResults.length)
+        : 0;
+      const overallLevel = overallScore > 0 ? Math.min(5, Math.floor(overallScore / 20) + 1) : 0;
+      
+      return {
+        session,
+        overallScore,
+        overallLevel,
+        totalAnswered: answers.length,
+        categoryResults,
+        competencyResults,
+      };
+    }),
 });
 
 /**
