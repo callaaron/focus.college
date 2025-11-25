@@ -488,6 +488,61 @@ const assessmentRouter = router({
     }),
 
   /**
+   * Get questions for an assessment session
+   */
+  getSessionQuestions: protectedProcedure
+    .input(z.object({
+      sessionId: z.number(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { db, user } = ctx;
+      
+      // Get session
+      const [session] = await db
+        .select()
+        .from(schema.assessmentSessions)
+        .where(
+          and(
+            eq(schema.assessmentSessions.id, input.sessionId),
+            eq(schema.assessmentSessions.userId, user.id)
+          )
+        )
+        .limit(1);
+      
+      if (!session) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: '评估会话不存在',
+        });
+      }
+      
+      // Get questions for this session
+      const questions = await db
+        .select()
+        .from(schema.assessmentQuestions)
+        .where(eq(schema.assessmentQuestions.isActive, true))
+        .orderBy(schema.assessmentQuestions.sortOrder)
+        .limit(session.totalQuestions);
+      
+      // Get user's answers
+      const answers = await db
+        .select()
+        .from(schema.userAnswers)
+        .where(eq(schema.userAnswers.userId, user.id));
+      
+      return {
+        session,
+        questions,
+        answers,
+        progress: {
+          total: session.totalQuestions,
+          completed: session.answeredQuestions,
+          percentage: Math.round((session.answeredQuestions / session.totalQuestions) * 100),
+        },
+      };
+    }),
+
+  /**
    * Submit answer for a question
    */
   submitAnswer: protectedProcedure

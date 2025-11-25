@@ -78,8 +78,8 @@ export default function Assessment() {
     return <PageSkeleton />;
   }
 
-  // Check if profile is complete
-  const profileIncomplete = !completion || completion.completionRate < 100;
+  // Check if profile is complete (require at least 60% completion)
+  const profileIncomplete = !completion || completion.completionRate < 60;
 
   return (
     <DashboardLayout>
