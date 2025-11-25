@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { APP_LOGO, APP_TITLE } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
+import { usePreloadCriticalRoutes, preloadRoute } from "@/hooks/useRoutePreload";
 import { LayoutDashboard, LogOut, PanelLeft, User, BarChart3, ClipboardList, Target, TrendingUp, BookOpen, Building2, GitCompare, GraduationCap } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -55,6 +56,9 @@ export default function DashboardLayout({
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
   const { loading, user } = useAuth();
+
+  // Preload critical routes after component mounts
+  usePreloadCriticalRoutes();
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
@@ -224,6 +228,7 @@ function DashboardLayoutContent({
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
+                      onMouseEnter={() => preloadRoute(item.path)}
                       tooltip={item.label}
                       className={`h-10 transition-all font-normal`}
                     >

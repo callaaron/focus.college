@@ -10,10 +10,10 @@ import "./index.css";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Data remains fresh for 5 minutes
-      staleTime: 5 * 60 * 1000,
-      // Cache data for 10 minutes
-      gcTime: 10 * 60 * 1000,
+      // Data remains fresh for 10 minutes (more aggressive caching)
+      staleTime: 10 * 60 * 1000,
+      // Cache data for 30 minutes (longer retention)
+      gcTime: 30 * 60 * 1000,
       // Retry failed requests only once
       retry: 1,
       // Retry delay
@@ -26,6 +26,8 @@ const queryClient = new QueryClient({
       refetchOnReconnect: false,
       // Network mode - online only for better UX
       networkMode: 'online',
+      // Keep previous data while fetching new data (smoother transitions)
+      placeholderData: (previousData: any) => previousData,
     },
     mutations: {
       // Retry mutations once
