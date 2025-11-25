@@ -69,19 +69,30 @@ export default defineConfig({
         assetFileNames: 'assets/[name]-[hash].[ext]',
       },
     },
-    // Minification settings
+    // Minification settings - AGGRESSIVE
     minify: 'terser',
     terserOptions: {
       compress: {
-        drop_console: true, // Remove console.logs in production
+        drop_console: true,
         drop_debugger: true,
-        pure_funcs: ['console.log', 'console.info', 'console.debug'],
+        pure_funcs: ['console.log', 'console.info', 'console.debug', 'console.warn'],
+        passes: 3, // Multiple compression passes for smaller size
+        unsafe: true, // Enable unsafe optimizations
+        unsafe_comps: true,
+        unsafe_math: true,
+        unsafe_proto: true,
+        toplevel: true, // Mangle top-level names
+      },
+      mangle: {
+        toplevel: true, // Mangle top-level names for smaller size
+        safari10: true, // Work around Safari 10 bug
       },
       format: {
-        comments: false, // Remove comments
+        comments: false, // Remove all comments
+        ecma: 2020, // Target ES2020
       },
     },
-    // Source map for production debugging (can disable for smaller builds)
+    // Source map disabled for smaller builds
     sourcemap: false,
     // Chunk size warnings
     chunkSizeWarningLimit: 600,
@@ -91,6 +102,10 @@ export default defineConfig({
     reportCompressedSize: true,
     // Target modern browsers for smaller bundle
     target: 'es2020',
+    // Module preload polyfill disabled for faster loading
+    modulePreload: {
+      polyfill: false, // Assume modern browsers
+    },
   },
   server: {
     host: true,

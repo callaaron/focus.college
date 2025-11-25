@@ -59,21 +59,46 @@ export function preloadRoutes(paths: string[]) {
 
 /**
  * Hook: 在组件挂载时预加载关键路由
+ * AGGRESSIVE: 立即预加载所有常用路由
  */
 export function usePreloadCriticalRoutes() {
   useEffect(() => {
-    // 预加载最常访问的路由
+    // 预加载所有常用路由
     const criticalRoutes = [
       '/dashboard',
       '/profile',
       '/assessment',
       '/competencies',
+      '/challenge',
+      '/analysis',
+      '/growth',
+      '/company',
+      '/learning-path',
     ];
     
-    // 延迟2秒后开始预加载，避免影响首次渲染
+    // 立即开始预加载第一批（最关键的）
+    const immediate = ['/dashboard', '/profile', '/assessment'];
+    immediate.forEach(path => preloadRoute(path));
+    
+    // 500ms后预加载其余的
     const timer = setTimeout(() => {
-      preloadRoutes(criticalRoutes);
-    }, 2000);
+      criticalRoutes
+        .filter(path => !immediate.includes(path))
+        .forEach(path => preloadRoute(path));
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, []);
+}
+
+/**
+ * Hook: 预加载所有路由（用于登录后）
+ */
+export function usePreloadAllRoutes() {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      Object.keys(routeComponentMap).forEach(path => preloadRoute(path));
+    }, 1000);
     
     return () => clearTimeout(timer);
   }, []);

@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import { RouteSkeleton } from "./components/RouteSkeleton";
+import { EmptySkeleton } from "./components/EmptySkeleton";
 
 // Critical pages - loaded immediately
 import Home from "./pages/Home";
@@ -34,7 +34,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 
 function Router() {
   return (
-    <Suspense fallback={<RouteSkeleton />}>
+    <Suspense fallback={<EmptySkeleton />}>
       <Switch>
         {/* Critical routes - no lazy loading */}
         <Route path={"/"} component={Home} />

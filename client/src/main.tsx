@@ -10,14 +10,12 @@ import "./index.css";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Data remains fresh for 10 minutes (more aggressive caching)
-      staleTime: 10 * 60 * 1000,
-      // Cache data for 30 minutes (longer retention)
-      gcTime: 30 * 60 * 1000,
-      // Retry failed requests only once
-      retry: 1,
-      // Retry delay
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+      // ULTRA aggressive caching - 30 minutes stale time
+      staleTime: 30 * 60 * 1000,
+      // Cache data for 60 minutes (maximum retention)
+      gcTime: 60 * 60 * 1000,
+      // No retry for faster failures
+      retry: 0,
       // Don't refetch on window focus for better performance
       refetchOnWindowFocus: false,
       // Don't refetch on mount if data is still fresh
@@ -28,10 +26,12 @@ const queryClient = new QueryClient({
       networkMode: 'online',
       // Keep previous data while fetching new data (smoother transitions)
       placeholderData: (previousData: any) => previousData,
+      // Enable structural sharing for better performance
+      structuralSharing: true,
     },
     mutations: {
-      // Retry mutations once
-      retry: 1,
+      // No retry for mutations
+      retry: 0,
       // Network mode
       networkMode: 'online',
     },
