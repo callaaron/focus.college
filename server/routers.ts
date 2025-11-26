@@ -17,10 +17,12 @@ import { calculateWeightedScore, determineLevel } from "./scoreCalculation";
 import { feedbacks, assessmentSessions, userAnswers, industries, positions, industryCompetencies, positionCompetencies, changelogs, users } from "../drizzle/schema";
 import bcrypt from "bcryptjs";
 import { challengesRouter } from "./routers/challenges";
+import { industryRouter } from "./routers/industry";
 
 export const appRouter = router({
   system: systemRouter,
   challenges: challengesRouter,
+  industry: industryRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
