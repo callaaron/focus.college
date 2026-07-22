@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, AlertCircle, CheckCircle2, Lock } from "lucide-react";
+import PageContainer from "@/components/PageContainer";
 
 export default function ChangePassword() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -70,14 +71,8 @@ export default function ChangePassword() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">修改密码</h1>
-          <p className="text-muted-foreground mt-2">
-            为了账户安全，建议定期修改密码
-          </p>
-        </div>
-
+      <PageContainer pageTitle="修改密码" pageDescription="为了账户安全，建议定期修改密码" className="max-w-2xl">
+        <div className="space-y-5">
         <Card>
           <CardHeader>
             <div className="flex items-center gap-3">
@@ -187,7 +182,8 @@ export default function ChangePassword() {
             </div>
           </CardContent>
         </Card>
-      </div>
+        </div>
+      </PageContainer>
     </DashboardLayout>
   );
 }

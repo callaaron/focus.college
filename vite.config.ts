@@ -3,11 +3,34 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "path";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime()];
+// QQ Browser headless mode doesn't execute <script type="module">.
+// We use a post-build step to convert to dynamic import() instead.
+const plugins: Plugin[] = [
+  react(),
+  tailwindcss(),
+  jsxLocPlugin(),
+  {
+    // Auto-replace <script type="module" src="..."> with dynamic import()
+    // to keep the build compatible with QQ Browser headless automation.
+    name: "qq-browser-shim",
+    apply: "build",
+    transformIndexHtml: {
+      order: "post",
+      handler(html) {
+        return html.replace(
+          /<script type="module" crossorigin src="([^"]+)"><\/script>/g,
+          (_match, src) =>
+            `<script>/* QQ Browser shim: dynamic import() */\nimport('${src}').catch(function(e){document.title='\\u26A0 '+e.message.substring(0,150);});</script>`
+        );
+      },
+    },
+  },
+];
+// vitePluginManusRuntime() disabled — incompatible with QQ Browser automation
 
 export default defineConfig({
   plugins,
@@ -27,42 +50,9 @@ export default defineConfig({
     // Optimization settings
     rollupOptions: {
       output: {
-        // Manual chunking for better caching
-        manualChunks: (id) => {
-          // Vendor chunks
-          if (id.includes('node_modules')) {
-            // React core
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'vendor-react';
-            }
-            // Router
-            if (id.includes('wouter')) {
-              return 'vendor-router';
-            }
-            // Query
-            if (id.includes('@tanstack/react-query')) {
-              return 'vendor-query';
-            }
-            // tRPC
-            if (id.includes('@trpc')) {
-              return 'vendor-trpc';
-            }
-            // Recharts (large chart library)
-            if (id.includes('recharts')) {
-              return 'vendor-charts';
-            }
-            // UI libraries
-            if (id.includes('framer-motion') || id.includes('lucide-react')) {
-              return 'vendor-ui';
-            }
-            // Radix UI components
-            if (id.includes('@radix-ui')) {
-              return 'ui-components';
-            }
-            // All other node_modules
-            return 'vendor';
-          }
-        },
+        // QQ Browser: single bundle (no code splitting) — dynamic import()
+        // can't resolve cross-chunk dependencies in headless mode
+        inlineDynamicImports: true,
         // Asset file naming for better caching
         chunkFileNames: 'assets/[name]-[hash].js',
         entryFileNames: 'assets/[name]-[hash].js',

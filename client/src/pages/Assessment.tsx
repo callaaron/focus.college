@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,9 +17,7 @@ import {
   Loader2
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { PageSkeleton } from "@/components/PageSkeleton";
-import { FastListSkeleton } from "@/components/FastSkeleton";
-import { PageTransition, FadeInUp, StaggerContainer, StaggerItem } from "@/components/PageTransition";
+import PageContainer from "@/components/PageContainer";
 import { toast } from "sonner";
 
 export default function Assessment() {
@@ -74,295 +72,292 @@ export default function Assessment() {
   ).length || 0;
   const completionRate = totalCompetencies > 0 ? Math.round((assessedCount / totalCompetencies) * 100) : 0;
 
-  if (profileLoading || completionLoading || competenciesLoading) {
-    return <PageSkeleton />;
-  }
+  const isLoading = profileLoading || completionLoading || competenciesLoading;
 
-  // Check if profile is complete (require at least 60% completion)
-  const profileIncomplete = !completion || completion.completionRate < 60;
+  // Check if profile is complete (at least 25% = 2+ of 8 fields filled)
+  // Lowered from 60% to reduce cold-start friction
+  const profileIncomplete = !completion || completion.completionRate < 25;
 
   return (
     <DashboardLayout>
-      <PageTransition>
-        <div className="max-w-6xl mx-auto space-y-6">
-          {/* Header */}
-          <FadeInUp>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">能力评估</h1>
-              <p className="text-muted-foreground mt-2">
-                通过科学的评估问卷，全面了解您的管理能力水平
-              </p>
-            </div>
-          </FadeInUp>
+      <PageContainer isLoading={isLoading} pageTitle="能力评估" pageDescription="通过科学的评估问卷，全面了解您的管理能力水平">
+        <div className="space-y-5">
+          {/* Profile Incomplete Warning */}
+          {profileIncomplete && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <span>
+                  个人信息完善度 {completion?.completionRate || 0}%（需 ≥25%），建议至少填写
+                  <strong>行业类型</strong>和<strong>当前岗位</strong>以解锁评估。
+                  {completion?.missingFields && completion.missingFields.length > 0 && (
+                    <span className="text-muted-foreground"> 缺：{completion.missingFields.join('、')}</span>
+                  )}
+                </span>
+                <Button 
+                  variant="link" 
+                  className="h-auto p-0 whitespace-nowrap"
+                  onClick={() => window.location.href = '/profile'}
+                >
+                  立即完善 →
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
 
-        {/* Profile Incomplete Warning */}
-        {profileIncomplete && (
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              请先完善您的个人信息（当前完成度：{completion?.completionRate || 0}%），
-              这将帮助系统提供更精准的评估和推荐。
-              <Button 
-                variant="link" 
-                className="ml-2 h-auto p-0"
-                onClick={() => window.location.href = '/profile'}
-              >
-                立即完善 →
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
+          {/* Stats Overview */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 *:data-[slot=card]:shadow-xs">
+            <Card className="@container/card bg-gradient-to-t from-primary/5 to-card dark:from-primary/10">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">总能力项</p>
+                  <ClipboardList className="h-4 w-4 text-emerald-500" />
+                </div>
+                <div className="text-2xl font-bold tracking-tight tabular-nums">{totalCompetencies}</div>
+              </CardHeader>
+              <CardFooter className="flex-col items-start gap-1 pt-0 text-xs">
+                <div className="line-clamp-1 flex gap-1.5 font-medium text-emerald-600 dark:text-emerald-400">
+                  能力矩阵 <ClipboardList className="size-3.5" />
+                </div>
+                <div className="text-muted-foreground">覆盖 8 大维度</div>
+              </CardFooter>
+            </Card>
 
-        {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="@container/card bg-gradient-to-t from-blue-50/50 to-card dark:from-blue-950/30">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">已评估</p>
+                  <CheckCircle2 className="h-4 w-4 text-blue-500" />
+                </div>
+                <div className="text-2xl font-bold tracking-tight tabular-nums text-blue-600 dark:text-blue-400">{assessedCount}</div>
+              </CardHeader>
+              <CardFooter className="flex-col items-start gap-1 pt-0 text-xs">
+                <div className="line-clamp-1 flex gap-1.5 font-medium text-blue-600 dark:text-blue-400">
+                  完成度 {completionRate}% <TrendingUp className="size-3.5" />
+                </div>
+                <div className="text-muted-foreground">持续评估中</div>
+              </CardFooter>
+            </Card>
+
+            <Card className="@container/card bg-gradient-to-t from-amber-50/50 to-card dark:from-amber-950/30">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">待评估</p>
+                  <Clock className="h-4 w-4 text-amber-500" />
+                </div>
+                <div className="text-2xl font-bold tracking-tight tabular-nums text-amber-600 dark:text-amber-400">
+                  {totalCompetencies - assessedCount}
+                </div>
+              </CardHeader>
+              <CardFooter className="flex-col items-start gap-1 pt-0 text-xs">
+                <div className="line-clamp-1 flex gap-1.5 font-medium text-amber-600 dark:text-amber-400">
+                  还有空间 <Clock className="size-3.5" />
+                </div>
+                <div className="text-muted-foreground">待解锁能力</div>
+              </CardFooter>
+            </Card>
+          </div>
+
+          {/* Assessment Types */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Initial Assessment */}
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-primary">
+              <CardHeader>
+                <div className="flex items-center justify-between mb-2">
+                  <Badge variant="secondary">推荐新用户</Badge>
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
+                </div>
+                <CardTitle>初始评估</CardTitle>
+                <CardDescription className="min-h-[60px]">
+                  全面系统的能力评估，涵盖8大维度、35项核心能力。
+                  首次使用建议完成此评估，建立您的能力基线。
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">题目数量</span>
+                    <span className="font-medium">49题</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">预计时长</span>
+                    <span className="font-medium">15-20分钟</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">评估维度</span>
+                    <span className="font-medium">全部8个</span>
+                  </div>
+                </div>
+                <Button 
+                  className="w-full" 
+                  disabled={profileIncomplete || isStarting}
+                  onClick={() => handleStartAssessment("initial")}
+                >
+                  {isStarting && selectedType === "initial" ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      启动中...
+                    </>
+                  ) : (
+                    <>
+                      <PlayCircle className="mr-2 h-4 w-4" />
+                      开始评估
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Regular Assessment */}
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-primary">
+              <CardHeader>
+                <div className="flex items-center justify-between mb-2">
+                  <Badge>常规评估</Badge>
+                  <ClipboardList className="h-5 w-5 text-green-600" />
+                </div>
+                <CardTitle>常规评估</CardTitle>
+                <CardDescription className="min-h-[60px]">
+                  定期评估您的能力进展，追踪成长轨迹。
+                  建议每季度进行一次，了解能力变化趋势。
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">题目数量</span>
+                    <span className="font-medium">35题</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">预计时长</span>
+                    <span className="font-medium">10-15分钟</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">评估维度</span>
+                    <span className="font-medium">核心7个</span>
+                  </div>
+                </div>
+                <Button 
+                  className="w-full" 
+                  variant="outline"
+                  disabled={profileIncomplete || isStarting}
+                  onClick={() => handleStartAssessment("regular")}
+                >
+                  {isStarting && selectedType === "regular" ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      启动中...
+                    </>
+                  ) : (
+                    <>
+                      <PlayCircle className="mr-2 h-4 w-4" />
+                      开始评估
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Position-based Assessment */}
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-primary">
+              <CardHeader>
+                <div className="flex items-center justify-between mb-2">
+                  <Badge variant="outline">针对性</Badge>
+                  <FileText className="h-5 w-5 text-purple-600" />
+                </div>
+                <CardTitle>岗位评估</CardTitle>
+                <CardDescription className="min-h-[60px]">
+                  基于您的目标岗位，评估相关核心能力。
+                  帮助您了解与目标岗位的能力匹配度。
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">题目数量</span>
+                    <span className="font-medium">20-25题</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">预计时长</span>
+                    <span className="font-medium">8-12分钟</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">评估维度</span>
+                    <span className="font-medium">岗位相关</span>
+                  </div>
+                </div>
+                <Button 
+                  className="w-full" 
+                  variant="outline"
+                  disabled={profileIncomplete || !profile?.currentRole || isStarting}
+                  onClick={() => handleStartAssessment("position")}
+                >
+                  {isStarting && selectedType === "position" ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      启动中...
+                    </>
+                  ) : (
+                    <>
+                      <PlayCircle className="mr-2 h-4 w-4" />
+                      开始评估
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Recent Assessment History */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                总能力项
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                评估历史
               </CardTitle>
-              <ClipboardList className="h-4 w-4 text-muted-foreground" />
+              <CardDescription>
+                您最近的评估记录
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{totalCompetencies}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                覆盖8大管理维度
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                已评估
-              </CardTitle>
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{assessedCount}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                完成度 {completionRate}%
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                待评估
-              </CardTitle>
-              <Clock className="h-4 w-4 text-orange-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">
-                {totalCompetencies - assessedCount}
+              <div className="text-center py-8 text-muted-foreground">
+                <ClipboardList className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>暂无评估记录</p>
+                <p className="text-sm mt-2">开始您的第一次评估吧！</p>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                还有提升空间
-              </p>
+            </CardContent>
+          </Card>
+
+          {/* Assessment Tips */}
+          <Card className="bg-blue-50/50 border-blue-200">
+            <CardHeader>
+              <CardTitle className="text-blue-900 flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" />
+                评估小贴士
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3 text-sm text-blue-700">
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <p>评估过程中请根据您的<strong>实际情况</strong>作答，没有对错之分</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <p>建议选择<strong>安静的环境</strong>，集中精力完成评估</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <p>评估结果将帮助系统为您推荐<strong>个性化的成长路径</strong></p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <p>可以随时<strong>暂停和继续</strong>，您的答案会自动保存</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
-
-        {/* Assessment Types */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Initial Assessment */}
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-primary">
-            <CardHeader>
-              <div className="flex items-center justify-between mb-2">
-                <Badge variant="secondary">推荐新用户</Badge>
-                <TrendingUp className="h-5 w-5 text-blue-600" />
-              </div>
-              <CardTitle>初始评估</CardTitle>
-              <CardDescription className="min-h-[60px]">
-                全面系统的能力评估，涵盖8大维度、35项核心能力。
-                首次使用建议完成此评估，建立您的能力基线。
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">题目数量</span>
-                  <span className="font-medium">49题</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">预计时长</span>
-                  <span className="font-medium">15-20分钟</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">评估维度</span>
-                  <span className="font-medium">全部8个</span>
-                </div>
-              </div>
-              <Button 
-                className="w-full" 
-                disabled={profileIncomplete || isStarting}
-                onClick={() => handleStartAssessment("initial")}
-              >
-                {isStarting && selectedType === "initial" ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    启动中...
-                  </>
-                ) : (
-                  <>
-                    <PlayCircle className="mr-2 h-4 w-4" />
-                    开始评估
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Regular Assessment */}
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-primary">
-            <CardHeader>
-              <div className="flex items-center justify-between mb-2">
-                <Badge>常规评估</Badge>
-                <ClipboardList className="h-5 w-5 text-green-600" />
-              </div>
-              <CardTitle>常规评估</CardTitle>
-              <CardDescription className="min-h-[60px]">
-                定期评估您的能力进展，追踪成长轨迹。
-                建议每季度进行一次，了解能力变化趋势。
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">题目数量</span>
-                  <span className="font-medium">35题</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">预计时长</span>
-                  <span className="font-medium">10-15分钟</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">评估维度</span>
-                  <span className="font-medium">核心7个</span>
-                </div>
-              </div>
-              <Button 
-                className="w-full" 
-                variant="outline"
-                disabled={profileIncomplete || isStarting}
-                onClick={() => handleStartAssessment("regular")}
-              >
-                {isStarting && selectedType === "regular" ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    启动中...
-                  </>
-                ) : (
-                  <>
-                    <PlayCircle className="mr-2 h-4 w-4" />
-                    开始评估
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Position-based Assessment */}
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-primary">
-            <CardHeader>
-              <div className="flex items-center justify-between mb-2">
-                <Badge variant="outline">针对性</Badge>
-                <FileText className="h-5 w-5 text-purple-600" />
-              </div>
-              <CardTitle>岗位评估</CardTitle>
-              <CardDescription className="min-h-[60px]">
-                基于您的目标岗位，评估相关核心能力。
-                帮助您了解与目标岗位的能力匹配度。
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">题目数量</span>
-                  <span className="font-medium">20-25题</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">预计时长</span>
-                  <span className="font-medium">8-12分钟</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">评估维度</span>
-                  <span className="font-medium">岗位相关</span>
-                </div>
-              </div>
-              <Button 
-                className="w-full" 
-                variant="outline"
-                disabled={profileIncomplete || !profile?.currentRole || isStarting}
-                onClick={() => handleStartAssessment("position")}
-              >
-                {isStarting && selectedType === "position" ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    启动中...
-                  </>
-                ) : (
-                  <>
-                    <PlayCircle className="mr-2 h-4 w-4" />
-                    开始评估
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Recent Assessment History */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              评估历史
-            </CardTitle>
-            <CardDescription>
-              您最近的评估记录
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center py-8 text-muted-foreground">
-              <ClipboardList className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>暂无评估记录</p>
-              <p className="text-sm mt-2">开始您的第一次评估吧！</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Assessment Tips */}
-        <Card className="bg-blue-50/50 border-blue-200">
-          <CardHeader>
-            <CardTitle className="text-blue-900 flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              评估小贴士
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3 text-sm text-blue-700">
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <p>评估过程中请根据您的<strong>实际情况</strong>作答，没有对错之分</p>
-              </div>
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <p>建议选择<strong>安静的环境</strong>，集中精力完成评估</p>
-              </div>
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <p>评估结果将帮助系统为您推荐<strong>个性化的成长路径</strong></p>
-              </div>
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <p>可以随时<strong>暂停和继续</strong>，您的答案会自动保存</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        </div>
-      </PageTransition>
+      </PageContainer>
     </DashboardLayout>
   );
 }

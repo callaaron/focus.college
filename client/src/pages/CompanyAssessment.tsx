@@ -7,7 +7,7 @@ import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { Loader2, CheckCircle2, ArrowRight, ArrowLeft, Info } from "lucide-react";
-import { PageTransition, FadeInUp } from "@/components/PageTransition";
+import PageContainer from "@/components/PageContainer";
 import { toast } from "sonner";
 
 // Assessment questions for each dimension
@@ -252,82 +252,69 @@ export default function CompanyAssessment() {
 
   return (
     <DashboardLayout>
-      <PageTransition>
-        <div className="max-w-4xl mx-auto space-y-6">
-          {/* Header */}
-          <FadeInUp>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">企业能力评估</h1>
-              <p className="text-muted-foreground mt-1">
-                评估企业在四个核心维度的能力现状
-              </p>
-            </div>
-          </FadeInUp>
-
+      <PageContainer pageTitle="企业能力评估" pageDescription="评估企业在四个核心维度的能力现状" className="max-w-4xl">
+        <div className="space-y-5">
           {/* Progress */}
-          <FadeInUp delay={0.1}>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">评估进度</span>
-                    <span className="text-sm text-muted-foreground">
-                      {currentDimensionIndex + 1} / {dimensions.length}
-                    </span>
-                  </div>
-                  <Progress value={progress} />
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    {dimensions.map((dim) => (
-                      <span
-                        key={dim.key}
-                        className={
-                          dim.key === currentDimension ? "font-semibold text-primary" : ""
-                        }
-                      >
-                        {dim.icon} {dim.label}
-                      </span>
-                    ))}
-                  </div>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">评估进度</span>
+                  <span className="text-sm text-muted-foreground tabular-nums">
+                    {currentDimensionIndex + 1} / {dimensions.length}
+                  </span>
                 </div>
-              </CardContent>
-            </Card>
-          </FadeInUp>
+                <Progress value={progress} />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  {dimensions.map((dim) => (
+                    <span
+                      key={dim.key}
+                      className={
+                        dim.key === currentDimension ? "font-semibold text-primary" : ""
+                      }
+                    >
+                      {dim.icon} {dim.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Questions */}
-          <FadeInUp delay={0.2}>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="text-2xl">
-                    {dimensions[currentDimensionIndex].icon}
-                  </span>
-                  <span>{dimensions[currentDimensionIndex].label}</span>
-                </CardTitle>
-                <CardDescription>
-                  请根据企业实际情况对以下问题进行评分（0-100分）
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {currentQuestions.map((question, index) => {
-                  const value = answers[question.id] || 0;
-                  return (
-                    <div key={question.id} className="space-y-3 pb-6 border-b last:border-b-0">
-                      <div className="flex items-start gap-2">
-                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-sm font-semibold flex items-center justify-center">
-                          {index + 1}
-                        </span>
-                        <div className="flex-1">
-                          <p className="font-medium">{question.question}</p>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {question.description}
-                          </p>
-                        </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-2xl">
+                  {dimensions[currentDimensionIndex].icon}
+                </span>
+                <span>{dimensions[currentDimensionIndex].label}</span>
+              </CardTitle>
+              <CardDescription>
+                请根据企业实际情况对以下问题进行评分（0-100分）
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {currentQuestions.map((question, index) => {
+                const value = answers[question.id] || 0;
+                return (
+                  <div key={question.id} className="space-y-3 pb-6 border-b last:border-b-0">
+                    <div className="flex items-start gap-2">
+                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-sm font-semibold flex items-center justify-center">
+                        {index + 1}
+                      </span>
+                      <div className="flex-1">
+                        <p className="font-medium">{question.question}</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {question.description}
+                        </p>
                       </div>
-                      <div className="pl-8 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">当前评分:</span>
-                          <span className="text-2xl font-bold text-primary">{value}</span>
-                        </div>
+                    </div>
+                    <div className="pl-8 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">当前评分:</span>
+                        <span className="text-2xl font-bold text-primary tabular-nums">{value}</span>
+                      </div>
                         <Slider
                           value={[value]}
                           onValueChange={([v]) => handleAnswerChange(question.id, v)}
@@ -346,11 +333,9 @@ export default function CompanyAssessment() {
                 })}
               </CardContent>
             </Card>
-          </FadeInUp>
 
           {/* Navigation */}
-          <FadeInUp delay={0.3}>
-            <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center">
               <Button
                 variant="outline"
                 onClick={handlePrevious}
@@ -385,30 +370,27 @@ export default function CompanyAssessment() {
                 </Button>
               )}
             </div>
-          </FadeInUp>
 
           {/* Info Card */}
-          <FadeInUp delay={0.4}>
-            <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-900">
-              <CardContent className="pt-6">
-                <div className="flex gap-3">
-                  <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                  <div className="space-y-1 text-sm text-blue-900 dark:text-blue-100">
-                    <p className="font-semibold">评估提示</p>
-                    <ul className="list-disc list-inside space-y-1 text-blue-800 dark:text-blue-200">
-                      <li>请根据企业实际情况客观评分</li>
-                      <li>0分表示能力非常薄弱或不具备</li>
-                      <li>50分表示能力处于行业中等水平</li>
-                      <li>100分表示能力处于行业领先水平</li>
-                      <li>评估结果将帮助您了解企业能力现状并制定改进计划</li>
-                    </ul>
-                  </div>
+          <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-900">
+            <CardContent className="pt-6">
+              <div className="flex gap-3">
+                <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1 text-sm text-blue-900 dark:text-blue-100">
+                  <p className="font-semibold">评估提示</p>
+                  <ul className="list-disc list-inside space-y-1 text-blue-800 dark:text-blue-200">
+                    <li>请根据企业实际情况客观评分</li>
+                    <li>0分表示能力非常薄弱或不具备</li>
+                    <li>50分表示能力处于行业中等水平</li>
+                    <li>100分表示能力处于行业领先水平</li>
+                    <li>评估结果将帮助您了解企业能力现状并制定改进计划</li>
+                  </ul>
                 </div>
-              </CardContent>
-            </Card>
-          </FadeInUp>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      </PageTransition>
+      </PageContainer>
     </DashboardLayout>
   );
 }

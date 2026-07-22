@@ -3,13 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { APP_TITLE } from "@/const";
-import { 
-  TrendingUp, 
-  Target, 
-  Users, 
+import {
+  TrendingUp,
+  Target,
+  Users,
   BarChart3,
   ArrowRight,
-  CheckCircle2,
   Brain,
   Lightbulb,
   Rocket
@@ -42,6 +41,19 @@ export default function Home() {
   const handleLogin = () => {
     setLocation('/login');
   };
+
+  const features = [
+    { icon: Target, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-100 dark:bg-blue-900", title: "能力评估", desc: "49道精心设计的评估题目，全面覆盖8大能力域、35项核心能力" },
+    { icon: Brain, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-100 dark:bg-emerald-900", title: "AI智能分析", desc: "基于AI的深度分析，识别能力短板，提供个性化提升建议" },
+    { icon: BarChart3, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-100 dark:bg-purple-900", title: "成长追踪", desc: "可视化雷达图和趋势图，直观展示能力发展轨迹和进步空间" },
+    { icon: Users, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-100 dark:bg-amber-900", title: "智能推荐", desc: "根据行业和职位特点，推荐最需要关注的核心能力" },
+  ];
+
+  const steps = [
+    { n: 1, title: "完成初始评估", desc: "花费15-20分钟完成初始评估问卷，建立完整的能力画像" },
+    { n: 2, title: "查看能力分析", desc: "通过雷达图直观了解自己的能力水平，识别优势和短板" },
+    { n: 3, title: "持续提升成长", desc: "根据AI推荐的学习路径，持续提升，定期回顾进步" },
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted">
@@ -86,71 +98,35 @@ export default function Home() {
       {/* Features */}
       <section className="container mx-auto px-4 py-16">
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card>
-            <CardHeader>
-              <div className="h-12 w-12 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center mb-4">
-                <Target className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              </div>
-              <CardTitle>能力评估</CardTitle>
-              <CardDescription>
-                49道精心设计的评估题目，全面覆盖8大能力域、35项核心能力
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="h-12 w-12 rounded-lg bg-green-100 dark:bg-green-900 flex items-center justify-center mb-4">
-                <Brain className="h-6 w-6 text-green-600 dark:text-green-400" />
-              </div>
-              <CardTitle>AI智能分析</CardTitle>
-              <CardDescription>
-                基于AI的深度分析，识别能力短板，提供个性化提升建议
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="h-12 w-12 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center mb-4">
-                <BarChart3 className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-              </div>
-              <CardTitle>成长追踪</CardTitle>
-              <CardDescription>
-                可视化雷达图和趋势图，直观展示能力发展轨迹和进步空间
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="h-12 w-12 rounded-lg bg-orange-100 dark:bg-orange-900 flex items-center justify-center mb-4">
-                <Users className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-              </div>
-              <CardTitle>智能推荐</CardTitle>
-              <CardDescription>
-                根据行业和职位特点，推荐最需要关注的核心能力
-              </CardDescription>
-            </CardHeader>
-          </Card>
+          {features.map((f) => (
+            <Card key={f.title} className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <div className={`h-12 w-12 rounded-lg ${f.bg} flex items-center justify-center mb-4`}>
+                  <f.icon className={`h-6 w-6 ${f.color}`} />
+                </div>
+                <CardTitle>{f.title}</CardTitle>
+                <CardDescription>{f.desc}</CardDescription>
+              </CardHeader>
+            </Card>
+          ))}
         </div>
       </section>
 
       {/* Stats */}
       <section className="container mx-auto px-4 py-16">
-        <Card className="bg-gradient-to-r from-primary/10 to-purple-600/10">
+        <Card className="bg-gradient-to-r from-primary/10 to-purple-600/10 border-0">
           <CardContent className="py-12">
             <div className="grid md:grid-cols-3 gap-8 text-center">
               <div>
-                <div className="text-4xl font-bold text-primary mb-2">48+</div>
+                <div className="text-4xl font-bold text-primary mb-2 tabular-nums">48+</div>
                 <div className="text-muted-foreground">核心管理能力</div>
               </div>
               <div>
-                <div className="text-4xl font-bold text-primary mb-2">20+</div>
+                <div className="text-4xl font-bold text-primary mb-2 tabular-nums">20+</div>
                 <div className="text-muted-foreground">覆盖行业</div>
               </div>
               <div>
-                <div className="text-4xl font-bold text-primary mb-2">50+</div>
+                <div className="text-4xl font-bold text-primary mb-2 tabular-nums">50+</div>
                 <div className="text-muted-foreground">管理职位</div>
               </div>
             </div>
@@ -160,51 +136,31 @@ export default function Home() {
 
       {/* How it works */}
       <section className="container mx-auto px-4 py-16">
-        <h3 className="text-3xl font-bold text-center mb-12">如何使用</h3>
+        <h3 className="text-3xl font-semibold text-center mb-12">如何使用</h3>
         <div className="grid md:grid-cols-3 gap-8">
-          <div className="text-center">
-            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl font-bold text-primary">1</span>
+          {steps.map((s) => (
+            <div key={s.n} className="text-center">
+              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-primary">{s.n}</span>
+              </div>
+              <h4 className="text-xl font-semibold mb-2">{s.title}</h4>
+              <p className="text-muted-foreground">{s.desc}</p>
             </div>
-            <h4 className="text-xl font-semibold mb-2">完成初始评估</h4>
-            <p className="text-muted-foreground">
-              花费15-20分钟完成初始评估问卷，建立完整的能力画像
-            </p>
-          </div>
-          
-          <div className="text-center">
-            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl font-bold text-primary">2</span>
-            </div>
-            <h4 className="text-xl font-semibold mb-2">查看能力分析</h4>
-            <p className="text-muted-foreground">
-              通过雷达图直观了解自己的能力水平，识别优势和短板
-            </p>
-          </div>
-          
-          <div className="text-center">
-            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl font-bold text-primary">3</span>
-            </div>
-            <h4 className="text-xl font-semibold mb-2">持续提升成长</h4>
-            <p className="text-muted-foreground">
-              根据AI推荐的学习路径，持续提升，定期回顾进步
-            </p>
-          </div>
+          ))}
         </div>
       </section>
 
       {/* CTA */}
       <section className="container mx-auto px-4 py-20">
-        <Card className="bg-gradient-to-r from-primary to-purple-600 text-white">
+        <Card className="bg-gradient-to-r from-primary to-purple-600 text-white border-0">
           <CardContent className="py-16 text-center">
-            <h3 className="text-3xl font-bold mb-4">开始你的能力提升之旅</h3>
+            <h3 className="text-3xl font-semibold mb-4">开始你的能力提升之旅</h3>
             <p className="text-lg mb-8 opacity-90">
               加入我们，系统化地评估和提升你的管理能力
             </p>
-            <Button 
-              onClick={handleLogin} 
-              size="lg" 
+            <Button
+              onClick={handleLogin}
+              size="lg"
               variant="secondary"
               className="text-lg px-8"
             >

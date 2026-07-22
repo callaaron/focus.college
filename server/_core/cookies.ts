@@ -39,13 +39,14 @@ export function getSessionCookieOptions(
   //       ? hostname
   //       : undefined;
 
-  // In development, use "lax" sameSite for better compatibility with Vite proxy
-  const isDevelopment = process.env.NODE_ENV === "development";
-  
+  // Use "none" (which REQUIRES Secure) only on HTTPS. On plain HTTP — e.g. LAN
+  // access on the Mac Mini — browsers reject a sameSite:"none" cookie unless it is
+  // also Secure, so the session cookie gets dropped and login never persists.
+  // Fall back to "lax" on HTTP so the browser keeps the cookie and login works.
   return {
     httpOnly: true,
     path: "/",
-    sameSite: isDevelopment ? "lax" : "none",
+    sameSite: isSecureRequest(req) ? "none" : "lax",
     secure: isSecureRequest(req),
   };
 }

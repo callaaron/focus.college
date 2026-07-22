@@ -307,21 +307,27 @@ function DashboardLayoutContent({
       </div>
 
       <SidebarInset>
-        {isMobile && (
-          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+        {isMobile ? (
+          <div className="flex border-b h-12 items-center justify-between bg-background/95 px-3 backdrop-blur sticky top-0 z-40">
             <div className="flex items-center gap-2">
-              <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col gap-1">
-                  <span className="tracking-tight text-foreground">
-                    {activeMenuItem?.label ?? APP_TITLE}
-                  </span>
-                </div>
-              </div>
+              <SidebarTrigger className="h-8 w-8 rounded-lg" />
+              <span className="text-sm font-medium">{activeMenuItem?.label ?? APP_TITLE}</span>
             </div>
           </div>
+        ) : (
+          <header className="flex items-center h-12 border-b bg-background/80 backdrop-blur-sm px-6 sticky top-0 z-30">
+            <div className="flex items-center gap-3 text-sm">
+              <span className="text-muted-foreground">{APP_TITLE}</span>
+              <span className="text-muted-foreground/50">/</span>
+              <span className="font-medium text-foreground">
+                {activeMenuItem?.label ?? ''}
+              </span>
+            </div>
+          </header>
         )}
-        <main className="flex-1 p-4">{children}</main>
+        <main className="flex-1 overflow-auto">
+          <div className="max-w-7xl mx-auto p-4 md:p-6">{children}</div>
+        </main>
       </SidebarInset>
     </>
   );

@@ -2,40 +2,39 @@ import { useState, useEffect } from "react";
 import { useLocation, useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
-import PageTransition from "@/components/PageTransition";
-import PageSkeleton from "@/components/PageSkeleton";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import PageContainer from "@/components/PageContainer";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { BookOpen, Clock, CheckCircle2, Circle, PlayCircle, FileText, Video, Book, GraduationCap, Star, Target } from "lucide-react";
+import { BookOpen, Clock, CheckCircle2, Circle, PlayCircle, FileText, Video, Book, GraduationCap, Star, Target, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 export default function LearningPath() {
   const [location, navigate] = useLocation();
   const [, params] = useRoute("/learning-path/:pathId");
   const pathId = params?.pathId ? parseInt(params.pathId) : null;
-  
+
   const [selectedResource, setSelectedResource] = useState<any>(null);
   const [notes, setNotes] = useState("");
   const [rating, setRating] = useState(0);
-  
+
   // Fetch user data
   const { data: user } = trpc.auth.me.useQuery();
-  
+
   // Fetch user's learning paths
   const { data: paths, isLoading: pathsLoading, refetch: refetchPaths } = trpc.learningPaths.getMy.useQuery(undefined, {
     enabled: !!user && !pathId,
   });
-  
+
   // Fetch specific path details
   const { data: pathDetail, isLoading: detailLoading, refetch: refetchDetail } = trpc.learningPaths.getById.useQuery(
     { pathId: pathId! },
     { enabled: !!pathId }
   );
-  
+
   const updateProgress = trpc.learningPaths.updateProgress.useMutation({
     onSuccess: () => {
       toast.success("学习进度已更新");
@@ -46,12 +45,12 @@ export default function LearningPath() {
       toast.error("更新失败：" + error.message);
     },
   });
-  
+
   const isLoading = pathsLoading || detailLoading;
-  
+
   const handleStartResource = (resource: any) => {
     if (!pathId) return;
-    
+
     updateProgress.mutate({
       pathId,
       resourceId: resource.id,
@@ -59,10 +58,10 @@ export default function LearningPath() {
       progressPercent: 0,
     });
   };
-  
+
   const handleCompleteResource = (resource: any) => {
     if (!pathId) return;
-    
+
     updateProgress.mutate({
       pathId,
       resourceId: resource.id,
@@ -71,12 +70,12 @@ export default function LearningPath() {
       notes: notes || undefined,
       rating: rating > 0 ? rating : undefined,
     });
-    
+
     setNotes("");
     setRating(0);
     setSelectedResource(null);
   };
-  
+
   const getResourceIcon = (type: string) => {
     switch (type) {
       case "article": return <FileText className="w-5 h-5" />;
@@ -86,12 +85,12 @@ export default function LearningPath() {
       default: return <BookOpen className="w-5 h-5" />;
     }
   };
-  
+
   const getResourceProgress = (resourceId: number) => {
     if (!pathDetail?.progress) return null;
     return pathDetail.progress.find((p: any) => p.resourceId === resourceId);
   };
-  
+
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
       case "beginner": return "bg-green-100 text-green-700 border-green-200";
@@ -100,72 +99,59 @@ export default function LearningPath() {
       default: return "bg-gray-100 text-gray-700 border-gray-200";
     }
   };
-  
-  if (isLoading) {
-    return (
-      <DashboardLayout>
-        <PageSkeleton />
-      </DashboardLayout>
-    );
-  }
-  
+
   // Path detail view
   if (pathId && pathDetail) {
     const completionRate = pathDetail.totalResources > 0
       ? Math.round((pathDetail.completedResources / pathDetail.totalResources) * 100)
       : 0;
-    
+
     return (
       <DashboardLayout>
-        <PageTransition>
-          <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-start justify-between">
-              <div>
-                <Button variant="ghost" size="sm" onClick={() => navigate("/learning-path")} className="mb-2">
-                  ← 返回学习路径列表
-                </Button>
-                <h1 className="text-3xl font-bold tracking-tight">{pathDetail.title}</h1>
-                <p className="text-muted-foreground mt-2">{pathDetail.description}</p>
-              </div>
+        <PageContainer
+          isLoading={false}
+          pageTitle={pathDetail.title}
+          pageDescription={pathDetail.description}
+          pageHeaderAction={
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => navigate("/learning-path")}>
+                <ArrowLeft className="h-4 w-4 mr-1" /> 返回
+              </Button>
               <Badge variant={pathDetail.status === 'completed' ? 'default' : 'secondary'}>
                 {pathDetail.status === 'completed' ? '已完成' : pathDetail.status === 'active' ? '进行中' : '已暂停'}
               </Badge>
             </div>
-            
-            {/* Progress Overview */}
-            <Card>
-              <CardHeader>
-                <CardTitle>学习进度</CardTitle>
+          }
+        >
+          <div className="space-y-5">
+            {/* Progress Overview — gradient panel */}
+            <Card className="@container/card bg-gradient-to-t from-primary/5 to-card dark:from-primary/10">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">学习进度</p>
+                  <BookOpen className="h-4 w-4 text-emerald-500" />
+                </div>
+                <div className="text-3xl font-bold tracking-tight tabular-nums">{completionRate}%</div>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">总体进度</span>
-                      <span className="text-sm font-bold">{completionRate}%</span>
-                    </div>
-                    <Progress value={completionRate} className="h-3" />
+              <CardContent className="space-y-4">
+                <Progress value={completionRate} className="h-2" />
+                <div className="grid grid-cols-3 gap-4 pt-1">
+                  <div className="text-center">
+                    <div className="text-xl font-bold tabular-nums">{pathDetail.totalResources}</div>
+                    <div className="text-xs text-muted-foreground">总资源数</div>
                   </div>
-                  
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold">{pathDetail.totalResources}</div>
-                      <div className="text-xs text-muted-foreground">总资源数</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-600">{pathDetail.completedResources}</div>
-                      <div className="text-xs text-muted-foreground">已完成</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">{pathDetail.estimatedDays}天</div>
-                      <div className="text-xs text-muted-foreground">预计时长</div>
-                    </div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-green-600 tabular-nums">{pathDetail.completedResources}</div>
+                    <div className="text-xs text-muted-foreground">已完成</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-blue-600 tabular-nums">{pathDetail.estimatedDays}天</div>
+                    <div className="text-xs text-muted-foreground">预计时长</div>
                   </div>
                 </div>
               </CardContent>
             </Card>
-            
+
             {/* Learning Resources */}
             <Card>
               <CardHeader>
@@ -173,12 +159,12 @@ export default function LearningPath() {
                 <CardDescription>按顺序完成以下资源以提升您的能力</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {pathDetail.resources?.map((resource: any, index: number) => {
                     const progress = getResourceProgress(resource.id);
                     const isCompleted = progress?.status === 'completed';
                     const isInProgress = progress?.status === 'in_progress';
-                    
+
                     return (
                       <div key={resource.id} className="border rounded-lg p-4">
                         <div className="flex items-start gap-4">
@@ -191,7 +177,7 @@ export default function LearningPath() {
                              isInProgress ? <PlayCircle className="w-5 h-5" /> :
                              <Circle className="w-5 h-5" />}
                           </div>
-                          
+
                           <div className="flex-1">
                             <div className="flex items-start justify-between mb-2">
                               <div>
@@ -210,18 +196,18 @@ export default function LearningPath() {
                                 <span className="text-sm">{resource.type}</span>
                               </div>
                             </div>
-                            
+
                             {resource.estimatedTime && (
                               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
                                 <Clock className="w-4 h-4" />
                                 <span>{resource.estimatedTime}分钟</span>
                               </div>
                             )}
-                            
+
                             {progress && progress.progressPercent > 0 && !isCompleted && (
                               <Progress value={progress.progressPercent} className="h-2 mb-3" />
                             )}
-                            
+
                             <div className="flex gap-2">
                               {!progress || progress.status === 'not_started' ? (
                                 <Button size="sm" onClick={() => handleStartResource(resource)}>
@@ -264,7 +250,7 @@ export default function LearningPath() {
                 </div>
               </CardContent>
             </Card>
-            
+
             {/* Complete Resource Dialog */}
             {selectedResource && (
               <Card>
@@ -282,7 +268,7 @@ export default function LearningPath() {
                       rows={4}
                     />
                   </div>
-                  
+
                   <div>
                     <label className="text-sm font-medium mb-2 block">资源评分（可选）</label>
                     <div className="flex gap-1">
@@ -292,14 +278,14 @@ export default function LearningPath() {
                           onClick={() => setRating(star)}
                           className="p-1 hover:scale-110 transition-transform"
                         >
-                          <Star 
+                          <Star
                             className={`w-6 h-6 ${star <= rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`}
                           />
                         </button>
                       ))}
                     </div>
                   </div>
-                  
+
                   <div className="flex gap-2">
                     <Button onClick={() => handleCompleteResource(selectedResource)}>
                       确认完成
@@ -312,24 +298,16 @@ export default function LearningPath() {
               </Card>
             )}
           </div>
-        </PageTransition>
+        </PageContainer>
       </DashboardLayout>
     );
   }
-  
+
   // List view
   return (
     <DashboardLayout>
-      <PageTransition>
-        <div className="space-y-6">
-          {/* Header */}
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">学习路径</h1>
-            <p className="text-muted-foreground mt-2">
-              基于能力缺口生成的个性化学习计划
-            </p>
-          </div>
-          
+      <PageContainer isLoading={isLoading} pageTitle="学习路径" pageDescription="基于能力缺口生成的个性化学习计划">
+        <div className="space-y-5">
           {!paths || paths.length === 0 ? (
             <Card>
               <CardHeader>
@@ -356,7 +334,7 @@ export default function LearningPath() {
                 const completionRate = path.totalResources > 0
                   ? Math.round((path.completedResources / path.totalResources) * 100)
                   : 0;
-                
+
                 return (
                   <Card key={path.id} className="cursor-pointer hover:shadow-md transition-shadow"
                         onClick={() => navigate(`/learning-path/${path.id}`)}>
@@ -375,24 +353,23 @@ export default function LearningPath() {
                       <div className="space-y-3">
                         <div>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm">完成进度</span>
-                            <span className="text-sm font-medium">{completionRate}%</span>
+                            <span className="text-sm tabular-nums">完成进度 <strong>{completionRate}%</strong></span>
                           </div>
                           <Progress value={completionRate} />
                         </div>
-                        
+
                         <div className="flex items-center gap-6 text-sm text-muted-foreground">
                           <div className="flex items-center gap-2">
                             <BookOpen className="w-4 h-4" />
-                            <span>{path.totalResources} 个资源</span>
+                            <span className="tabular-nums">{path.totalResources} 个资源</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <Clock className="w-4 h-4" />
-                            <span>预计 {path.estimatedDays} 天</span>
+                            <span className="tabular-nums">预计 {path.estimatedDays} 天</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <CheckCircle2 className="w-4 h-4 text-green-600" />
-                            <span>{path.completedResources} 已完成</span>
+                            <span className="tabular-nums">{path.completedResources} 已完成</span>
                           </div>
                         </div>
                       </div>
@@ -403,7 +380,7 @@ export default function LearningPath() {
             </div>
           )}
         </div>
-      </PageTransition>
+      </PageContainer>
     </DashboardLayout>
   );
 }

@@ -1,12 +1,12 @@
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
-import PageTransition from "@/components/PageTransition";
 import PageSkeleton from "@/components/PageSkeleton";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileQuestion, Layers, Activity } from "lucide-react";
 import { useLocation } from "wouter";
+import PageContainer from "@/components/PageContainer";
 
 export default function AdminQuestions() {
   const [, navigate] = useLocation();
@@ -17,7 +17,11 @@ export default function AdminQuestions() {
   const { data: stats } = trpc.questions.getStatistics.useQuery(undefined, {
     enabled: user?.role === 'admin',
   });
-  
+
+  const avgUsage = stats && stats.length > 0
+    ? Math.round(stats.reduce((sum: number, s: any) => sum + (s.avgUsageCount || 0), 0) / stats.length)
+    : 0;
+
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -25,54 +29,68 @@ export default function AdminQuestions() {
       </DashboardLayout>
     );
   }
+
+  const statsCards = [
+    {
+      title: "总题目数",
+      value: questions?.length || 0,
+      icon: FileQuestion,
+      tone: "from-primary/5 dark:from-primary/10",
+      iconColor: "text-emerald-500",
+      footerLabel: "题库总量",
+      footerAccent: "text-emerald-600 dark:text-emerald-400",
+    },
+    {
+      title: "涵盖能力",
+      value: stats?.length || 0,
+      icon: Layers,
+      tone: "from-blue-50/50 dark:from-blue-950/30",
+      iconColor: "text-blue-500",
+      footerLabel: "关联能力域",
+      footerAccent: "text-blue-600 dark:text-blue-400",
+    },
+    {
+      title: "平均使用次数",
+      value: avgUsage,
+      icon: Activity,
+      tone: "from-purple-50/50 dark:from-purple-950/30",
+      iconColor: "text-purple-500",
+      footerLabel: "每题平均",
+      footerAccent: "text-purple-600 dark:text-purple-400",
+    },
+  ];
   
   return (
     <DashboardLayout>
-      <PageTransition>
+      <PageContainer
+        pageTitle="题库管理"
+        pageDescription="管理评估问卷题目"
+        pageHeaderAction={
+          <Button variant="ghost" size="sm" onClick={() => navigate('/admin')}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            返回管理后台
+          </Button>
+        }
+      >
         <div className="space-y-6">
-          <div>
-            <Button variant="ghost" size="sm" onClick={() => navigate('/admin')} className="mb-2">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              返回管理后台
-            </Button>
-            <h1 className="text-3xl font-bold tracking-tight">题库管理</h1>
-            <p className="text-muted-foreground mt-2">
-              管理评估问卷题目
-            </p>
-          </div>
-          
           {/* Statistics */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">总题目数</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{questions?.length || 0}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">涵盖能力</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {stats?.length || 0}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">平均使用次数</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {stats && stats.length > 0 
-                    ? Math.round(stats.reduce((sum: number, s: any) => sum + (s.avgUsageCount || 0), 0) / stats.length)
-                    : 0}
-                </div>
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 *:data-[slot=card]:shadow-xs">
+            {statsCards.map((s) => (
+              <Card key={s.title} className={`@container/card bg-gradient-to-t ${s.tone}`}>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{s.title}</p>
+                    <s.icon className={`h-4 w-4 ${s.iconColor}`} />
+                  </div>
+                  <div className="text-2xl font-bold tracking-tight tabular-nums">{s.value}</div>
+                </CardHeader>
+                <CardFooter className="flex-col items-start gap-1 pt-0 text-xs">
+                  <div className={`line-clamp-1 flex gap-1.5 font-medium ${s.footerAccent}`}>
+                    {s.footerLabel} <s.icon className="size-3.5" />
+                  </div>
+                </CardFooter>
+              </Card>
+            ))}
           </div>
           
           <Card>
@@ -123,7 +141,7 @@ export default function AdminQuestions() {
             </CardContent>
           </Card>
         </div>
-      </PageTransition>
+      </PageContainer>
     </DashboardLayout>
   );
 }

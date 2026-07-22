@@ -210,13 +210,11 @@ const normalizeToolChoice = (
 };
 
 const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
+  `${ENV.deepseekApiUrl.replace(/\/$/, "")}/v1/chat/completions`;
 
 const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+  if (!ENV.deepseekApiKey) {
+    throw new Error("DEEPSEEK_API_KEY is not configured");
   }
 };
 
@@ -237,13 +235,9 @@ const normalizeResponseFormat = ({
   | undefined => {
   const explicitFormat = responseFormat || response_format;
   if (explicitFormat) {
-    if (
-      explicitFormat.type === "json_schema" &&
-      !explicitFormat.json_schema?.schema
-    ) {
-      throw new Error(
-        "responseFormat json_schema requires a defined schema object"
-      );
+    // DeepSeek does not support structured-output (json_schema); fall back to json_object
+    if (explicitFormat.type === "json_schema") {
+      return { type: "json_object" };
     }
     return explicitFormat;
   }
@@ -255,14 +249,41 @@ const normalizeResponseFormat = ({
     throw new Error("outputSchema requires both name and schema");
   }
 
-  return {
-    type: "json_schema",
-    json_schema: {
-      name: schema.name,
-      schema: schema.schema,
-      ...(typeof schema.strict === "boolean" ? { strict: schema.strict } : {}),
-    },
-  };
+  // DeepSeek: structured outputs are unsupported, use json_object instead
+  return { type: "json_object" };
+};
+
+// DeepSeek may wrap JSON in markdown code fences or prepend prose.
+// Extract the clean JSON so downstream JSON.parse calls succeed.
+const extractJsonContent = (raw: unknown): string | null => {
+  if (typeof raw !== "string") return null;
+  let s = raw.trim();
+
+  const fenced = s.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fenced) {
+    s = fenced[1].trim();
+  }
+
+  try {
+    JSON.parse(s);
+    return s;
+  } catch {
+    // not a bare JSON string, try to locate the outermost JSON below
+  }
+
+  const start = s.search(/[{\[]/);
+  const end = Math.max(s.lastIndexOf("}"), s.lastIndexOf("]"));
+  if (start !== -1 && end > start) {
+    const candidate = s.slice(start, end + 1);
+    try {
+      JSON.parse(candidate);
+      return candidate;
+    } catch {
+      // no valid JSON found
+    }
+  }
+
+  return null;
 };
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
@@ -280,7 +301,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   } = params;
 
   const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
+    model: ENV.deepseekModel,
     messages: messages.map(normalizeMessage),
   };
 
@@ -296,10 +317,11 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = normalizedToolChoice;
   }
 
-  payload.max_tokens = 32768
+  payload.max_tokens = params.maxTokens ?? params.max_tokens ?? 32768;
   payload.thinking = {
-    "budget_tokens": 128
-  }
+    type: "enabled",
+  };
+  payload.reasoning_effort = "high";
 
   const normalizedResponseFormat = normalizeResponseFormat({
     responseFormat,
@@ -316,7 +338,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      authorization: `Bearer ${ENV.deepseekApiKey}`,
     },
     body: JSON.stringify(payload),
   });
@@ -328,5 +350,18 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     );
   }
 
-  return (await response.json()) as InvokeResult;
+  const result = (await response.json()) as InvokeResult;
+
+  // When a JSON response format was requested, strip any markdown fences or
+  // surrounding prose so callers' JSON.parse works regardless of model quirks.
+  const wantsJson =
+    normalizedResponseFormat && normalizedResponseFormat.type !== "text";
+  if (wantsJson && result.choices?.[0]?.message) {
+    const cleaned = extractJsonContent(result.choices[0].message.content);
+    if (cleaned !== null) {
+      result.choices[0].message.content = cleaned;
+    }
+  }
+
+  return result;
 }

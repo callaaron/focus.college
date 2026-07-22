@@ -26,9 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle2, Loader2, AlertCircle, Lock, KeyRound } from "lucide-react";
 import { useLocation } from "wouter";
-import { Skeleton } from "@/components/ui/skeleton";
-import { PageSkeleton } from "@/components/PageSkeleton";
-import { PageTransition, FadeInUp } from "@/components/PageTransition";
+import PageContainer from "@/components/PageContainer";
 
 // Form schema based on profile.update input
 const profileFormSchema = z.object({
@@ -37,7 +35,7 @@ const profileFormSchema = z.object({
     required_error: "请选择公司规模",
   }),
   companyStage: z.enum([
-    "seed", "angel", "series_a", "series_b", "series_c", 
+    "seed", "angel", "series_a", "series_b", "series_c",
     "series_d", "pre_ipo", "public", "mature"
   ], {
     required_error: "请选择发展阶段",
@@ -87,7 +85,7 @@ export default function Profile() {
   // Fetch profile data
   const { data: profile, isLoading: profileLoading, refetch: refetchProfile } = trpc.profile.get.useQuery();
   const { data: completion, refetch: refetchCompletion } = trpc.profile.getCompletion.useQuery();
-  
+
   // Fetch industries list
   const { data: industries, isLoading: industriesLoading } = trpc.industries.list.useQuery();
 
@@ -138,9 +136,9 @@ export default function Profile() {
         // Create new profile
         await createProfile.mutateAsync(values);
       }
-      
+
       setSubmitSuccess(true);
-      
+
       // Refetch data
       await refetchProfile();
       await refetchCompletion();
@@ -153,9 +151,7 @@ export default function Profile() {
     }
   };
 
-  if (profileLoading || industriesLoading) {
-    return <PageSkeleton />;
-  }
+  const isLoading = profileLoading || industriesLoading;
 
   const industryOptions = industries?.map(ind => ({
     value: ind.name,
@@ -164,286 +160,280 @@ export default function Profile() {
 
   return (
     <DashboardLayout>
-      <PageTransition>
-        <div className="max-w-4xl mx-auto space-y-6">
-          {/* Header */}
-          <FadeInUp>
-            <div className="flex items-start justify-between">
-              <div>
-                <h1 className="text-3xl font-bold tracking-tight">用户画像配置</h1>
-                <p className="text-muted-foreground mt-2">
-                  完善您的个人信息，帮助系统提供更精准的能力评估和推荐
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => setLocation('/change-password')}
-                className="flex items-center gap-2"
-              >
-                <KeyRound className="h-4 w-4" />
-                修改密码
-              </Button>
-            </div>
-          </FadeInUp>
+      <PageContainer
+        isLoading={isLoading}
+        pageTitle="用户画像配置"
+        pageDescription="完善您的个人信息，帮助系统提供更精准的能力评估和推荐"
+        pageHeaderAction={
+          <Button
+            variant="outline"
+            onClick={() => setLocation('/change-password')}
+            className="flex items-center gap-2"
+          >
+            <KeyRound className="h-4 w-4" />
+            修改密码
+          </Button>
+        }
+      >
+        <div className="max-w-3xl mx-auto space-y-5">
+          {/* Completion Alert */}
+          {completion && completion.completionRate < 100 && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                信息完善度：<strong className="tabular-nums">{completion.completionRate}%</strong>
+                {completion.missingFields.length > 0 && (
+                  <>
+                    {" · "}还需完善：{completion.missingFields.join("、")}
+                  </>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
 
-        {/* Completion Alert */}
-        {completion && completion.completionRate < 100 && (
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              信息完善度：<strong>{completion.completionRate}%</strong>
-              {completion.missingFields.length > 0 && (
-                <>
-                  {" · "}还需完善：{completion.missingFields.join("、")}
-                </>
-              )}
-            </AlertDescription>
-          </Alert>
-        )}
+          {/* Success Alert */}
+          {submitSuccess && (
+            <Alert className="border-green-200 bg-green-50 text-green-800">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800">
+                个人信息已成功保存！
+              </AlertDescription>
+            </Alert>
+          )}
 
-        {/* Success Alert */}
-        {submitSuccess && (
-          <Alert className="border-green-200 bg-green-50 text-green-800">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
-              个人信息已成功保存！
-            </AlertDescription>
-          </Alert>
-        )}
+          {/* Error Alert */}
+          {submitError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{submitError}</AlertDescription>
+            </Alert>
+          )}
 
-        {/* Error Alert */}
-        {submitError && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{submitError}</AlertDescription>
-          </Alert>
-        )}
-
-        {/* Profile Form */}
-        <Card>
-          <CardHeader>
-            <CardTitle>基本信息</CardTitle>
-            <CardDescription>
-              请填写您的职业背景和管理信息
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                {/* Industry */}
-                <FormField
-                  control={form.control}
-                  name="industry"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>行业类型</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="请选择行业" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {industries?.map((industry) => (
-                            <SelectItem key={industry.id} value={industry.name}>
-                              {industry.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        选择您所在的行业领域
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Company Size */}
-                <FormField
-                  control={form.control}
-                  name="companySize"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>公司规模</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {companySizeOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        公司的员工规模
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Company Stage */}
-                <FormField
-                  control={form.control}
-                  name="companyStage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>发展阶段</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {companyStageOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        公司当前的融资或发展阶段
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Current Role */}
-                <FormField
-                  control={form.control}
-                  name="currentRole"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>当前岗位</FormLabel>
-                      <FormControl>
-                        <Input placeholder="例如：产品总监、技术经理" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        您目前担任的职位名称
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Management Level */}
-                <FormField
-                  control={form.control}
-                  name="managementLevel"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>管理级别</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {managementLevelOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        您在组织中的管理层级
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Direct Reports */}
-                <FormField
-                  control={form.control}
-                  name="directReports"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>直接下属人数</FormLabel>
-                      <FormControl>
-                        <Input type="number" min="0" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        直接向您汇报的团队成员数量
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Management Layers */}
-                <FormField
-                  control={form.control}
-                  name="managementLayers"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>管理层级</FormLabel>
-                      <FormControl>
-                        <Input type="number" min="0" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        您管理的组织层级数量（包括直接和间接下属）
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Years of Management */}
-                <FormField
-                  control={form.control}
-                  name="yearsOfManagement"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>管理年限</FormLabel>
-                      <FormControl>
-                        <Input type="number" min="0" step="0.5" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        您担任管理岗位的累计年限
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Submit Button */}
-                <div className="flex justify-end gap-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => form.reset()}
-                    disabled={createProfile.isPending || updateProfile.isPending}
-                  >
-                    重置
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={createProfile.isPending || updateProfile.isPending}
-                  >
-                    {(createProfile.isPending || updateProfile.isPending) && (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          {/* Profile Form */}
+          <Card>
+            <CardHeader>
+              <CardTitle>基本信息</CardTitle>
+              <CardDescription>
+                请填写您的职业背景和管理信息
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                  {/* Industry */}
+                  <FormField
+                    control={form.control}
+                    name="industry"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>行业类型</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="请选择行业" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {industries?.map((industry) => (
+                              <SelectItem key={industry.id} value={industry.name}>
+                                {industry.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          选择您所在的行业领域
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                    保存
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
+                  />
+
+                  {/* Company Size */}
+                  <FormField
+                    control={form.control}
+                    name="companySize"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>公司规模</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {companySizeOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          公司的员工规模
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Company Stage */}
+                  <FormField
+                    control={form.control}
+                    name="companyStage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>发展阶段</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {companyStageOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          公司当前的融资或发展阶段
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Current Role */}
+                  <FormField
+                    control={form.control}
+                    name="currentRole"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>当前岗位</FormLabel>
+                        <FormControl>
+                          <Input placeholder="例如：产品总监、技术经理" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          您目前担任的职位名称
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Management Level */}
+                  <FormField
+                    control={form.control}
+                    name="managementLevel"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>管理级别</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {managementLevelOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          您在组织中的管理层级
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Direct Reports */}
+                  <FormField
+                    control={form.control}
+                    name="directReports"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>直接下属人数</FormLabel>
+                        <FormControl>
+                          <Input type="number" min="0" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          直接向您汇报的团队成员数量
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Management Layers */}
+                  <FormField
+                    control={form.control}
+                    name="managementLayers"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>管理层级</FormLabel>
+                        <FormControl>
+                          <Input type="number" min="0" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          您管理的组织层级数量（包括直接和间接下属）
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Years of Management */}
+                  <FormField
+                    control={form.control}
+                    name="yearsOfManagement"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>管理年限</FormLabel>
+                        <FormControl>
+                          <Input type="number" min="0" step="0.5" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          您担任管理岗位的累计年限
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Submit Button */}
+                  <div className="flex justify-end gap-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => form.reset()}
+                      disabled={createProfile.isPending || updateProfile.isPending}
+                    >
+                      重置
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={createProfile.isPending || updateProfile.isPending}
+                    >
+                      {(createProfile.isPending || updateProfile.isPending) && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      保存
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
         </div>
-      </PageTransition>
+      </PageContainer>
     </DashboardLayout>
   );
 }

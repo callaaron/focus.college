@@ -1,11 +1,9 @@
 import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import AchievementCard from "@/components/AchievementCard";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PageTransition, FadeInUp, StaggerContainer, StaggerItem } from "@/components/PageTransition";
-import { PageSkeleton } from "@/components/PageSkeleton";
 import { trpc } from "@/lib/trpc";
 import { 
   Trophy, 
@@ -15,6 +13,7 @@ import {
   TrendingUp,
   Award
 } from "lucide-react";
+import PageContainer from "@/components/PageContainer";
 
 export default function Achievements() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -24,10 +23,6 @@ export default function Achievements() {
   
   // Fetch challenges stats for progress calculation
   const { data: stats } = trpc.challenges.getStats.useQuery();
-
-  if (isLoading) {
-    return <PageSkeleton />;
-  }
 
   // Mock achievements data (will be replaced with real data from API)
   const allAchievements = [
@@ -181,153 +176,140 @@ export default function Achievements() {
 
   return (
     <DashboardLayout>
-      <PageTransition>
-        <div className="max-w-7xl mx-auto space-y-6">
-          {/* Header */}
-          <FadeInUp>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">成就系统</h1>
-              <p className="text-muted-foreground mt-2">
-                解锁成就，见证你的成长历程
-              </p>
-            </div>
-          </FadeInUp>
-
+      <PageContainer isLoading={isLoading} pageTitle="成就系统" pageDescription="解锁成就，见证你的成长历程">
+        <div className="space-y-5">
           {/* Stats Cards */}
-          <StaggerContainer>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    已解锁
-                  </CardTitle>
-                  <Trophy className="h-4 w-4 text-yellow-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-yellow-600">
-                    {unlockedCount}/{totalAchievements}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    完成度 {completionRate}%
-                  </p>
-                </CardContent>
-              </Card>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 *:data-[slot=card]:shadow-xs">
+            <Card className="@container/card bg-gradient-to-t from-amber-50/50 to-card dark:from-amber-950/30">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">已解锁</p>
+                  <Trophy className="h-4 w-4 text-amber-500" />
+                </div>
+                <div className="text-2xl font-bold tracking-tight tabular-nums text-amber-600 dark:text-amber-400">
+                  {unlockedCount}/{totalAchievements}
+                </div>
+              </CardHeader>
+              <CardFooter className="flex-col items-start gap-1 pt-0 text-xs">
+                <div className="line-clamp-1 flex gap-1.5 font-medium text-amber-600 dark:text-amber-400">
+                  完成度 {completionRate}% <TrendingUp className="size-3.5" />
+                </div>
+                <div className="text-muted-foreground">持续解锁</div>
+              </CardFooter>
+            </Card>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    成就积分
-                  </CardTitle>
-                  <Star className="h-4 w-4 text-purple-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-purple-600">
-                    {totalPoints}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    累计获得
-                  </p>
-                </CardContent>
-              </Card>
+            <Card className="@container/card bg-gradient-to-t from-purple-50/50 to-card dark:from-purple-950/30">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">成就积分</p>
+                  <Star className="h-4 w-4 text-purple-500" />
+                </div>
+                <div className="text-2xl font-bold tracking-tight tabular-nums text-purple-600 dark:text-purple-400">
+                  {totalPoints}
+                </div>
+              </CardHeader>
+              <CardFooter className="flex-col items-start gap-1 pt-0 text-xs">
+                <div className="line-clamp-1 flex gap-1.5 font-medium text-purple-600 dark:text-purple-400">
+                  累计获得 <Star className="size-3.5" />
+                </div>
+                <div className="text-muted-foreground">奖励中心</div>
+              </CardFooter>
+            </Card>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    稀有成就
-                  </CardTitle>
-                  <Award className="h-4 w-4 text-blue-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-blue-600">
-                    {achievementsWithStatus.filter(a => a.unlocked && (a.rarity === 'rare' || a.rarity === 'epic' || a.rarity === 'legendary')).length}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    已获得
-                  </p>
-                </CardContent>
-              </Card>
+            <Card className="@container/card bg-gradient-to-t from-blue-50/50 to-card dark:from-blue-950/30">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">稀有成就</p>
+                  <Award className="h-4 w-4 text-blue-500" />
+                </div>
+                <div className="text-2xl font-bold tracking-tight tabular-nums text-blue-600 dark:text-blue-400">
+                  {achievementsWithStatus.filter(a => a.unlocked && (a.rarity === 'rare' || a.rarity === 'epic' || a.rarity === 'legendary')).length}
+                </div>
+              </CardHeader>
+              <CardFooter className="flex-col items-start gap-1 pt-0 text-xs">
+                <div className="line-clamp-1 flex gap-1.5 font-medium text-blue-600 dark:text-blue-400">
+                  已获得 <Award className="size-3.5" />
+                </div>
+                <div className="text-muted-foreground">珍贵收藏</div>
+              </CardFooter>
+            </Card>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    完成率
-                  </CardTitle>
-                  <TrendingUp className="h-4 w-4 text-green-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-green-600">
-                    {completionRate}%
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    继续加油
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          </StaggerContainer>
+            <Card className="@container/card bg-gradient-to-t from-emerald-50/50 to-card dark:from-emerald-950/30">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">完成率</p>
+                  <TrendingUp className="h-4 w-4 text-emerald-500" />
+                </div>
+                <div className="text-2xl font-bold tracking-tight tabular-nums text-emerald-600 dark:text-emerald-400">
+                  {completionRate}%
+                </div>
+              </CardHeader>
+              <CardFooter className="flex-col items-start gap-1 pt-0 text-xs">
+                <div className="line-clamp-1 flex gap-1.5 font-medium text-emerald-600 dark:text-emerald-400">
+                  继续加油 <TrendingUp className="size-3.5" />
+                </div>
+                <div className="text-muted-foreground">逐步达成</div>
+              </CardFooter>
+            </Card>
+          </div>
 
           {/* Achievements Grid */}
-          <FadeInUp delay={0.2}>
-            <Card>
-              <CardHeader>
-                <CardTitle>成就列表</CardTitle>
-                <CardDescription>
-                  完成挑战，解锁更多成就徽章
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <TabsList className="mb-6">
-                    <TabsTrigger value="all">
-                      全部 <Badge variant="secondary" className="ml-2">{achievementsWithStatus.length}</Badge>
-                    </TabsTrigger>
-                    <TabsTrigger value="count">
-                      <Target className="h-3 w-3 mr-1" />
-                      数量
-                    </TabsTrigger>
-                    <TabsTrigger value="streak">
-                      <Flame className="h-3 w-3 mr-1" />
-                      连续
-                    </TabsTrigger>
-                    <TabsTrigger value="accuracy">
-                      <Trophy className="h-3 w-3 mr-1" />
-                      准确率
-                    </TabsTrigger>
-                    <TabsTrigger value="special">
-                      <Star className="h-3 w-3 mr-1" />
-                      特殊
-                    </TabsTrigger>
-                  </TabsList>
+          <Card>
+            <CardHeader>
+              <CardTitle>成就列表</CardTitle>
+              <CardDescription>
+                完成挑战，解锁更多成就徽章
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
+                <TabsList className="mb-6">
+                  <TabsTrigger value="all">
+                    全部 <Badge variant="secondary" className="ml-2">{achievementsWithStatus.length}</Badge>
+                  </TabsTrigger>
+                  <TabsTrigger value="count">
+                    <Target className="h-3 w-3 mr-1" />
+                    数量
+                  </TabsTrigger>
+                  <TabsTrigger value="streak">
+                    <Flame className="h-3 w-3 mr-1" />
+                    连续
+                  </TabsTrigger>
+                  <TabsTrigger value="accuracy">
+                    <Trophy className="h-3 w-3 mr-1" />
+                    准确率
+                  </TabsTrigger>
+                  <TabsTrigger value="special">
+                    <Star className="h-3 w-3 mr-1" />
+                    特殊
+                  </TabsTrigger>
+                </TabsList>
 
-                  <TabsContent value={selectedCategory} className="mt-0">
-                    <StaggerContainer>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {filteredAchievements.map((achievement, index) => (
-                          <StaggerItem key={achievement.id} index={index}>
-                            <AchievementCard
-                              achievement={achievement}
-                              unlocked={achievement.unlocked}
-                              unlockedAt={achievement.unlockedAt}
-                              progress={achievement.progress}
-                            />
-                          </StaggerItem>
-                        ))}
-                      </div>
-                    </StaggerContainer>
+                <TabsContent value={selectedCategory} className="mt-0">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {filteredAchievements.map((achievement) => (
+                      <AchievementCard
+                        key={achievement.id}
+                        achievement={achievement}
+                        unlocked={achievement.unlocked}
+                        unlockedAt={achievement.unlockedAt}
+                        progress={achievement.progress}
+                      />
+                    ))}
+                  </div>
 
-                    {filteredAchievements.length === 0 && (
-                      <div className="text-center py-12 text-muted-foreground">
-                        <Trophy className="h-16 w-16 mx-auto mb-4 opacity-20" />
-                        <p>该类别暂无成就</p>
-                      </div>
-                    )}
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-          </FadeInUp>
+                  {filteredAchievements.length === 0 && (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Trophy className="h-16 w-16 mx-auto mb-4 opacity-20" />
+                      <p>该类别暂无成就</p>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
         </div>
-      </PageTransition>
+      </PageContainer>
     </DashboardLayout>
   );
 }

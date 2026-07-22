@@ -2881,7 +2881,7 @@ ${gapSummary}
     // 开始新的评估会话
     startSession: protectedProcedure
       .input(z.object({
-        sessionType: z.enum(["initial", "validation"]),
+        sessionType: z.enum(["initial", "validation", "regular", "position"]),
         totalQuestions: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -3022,7 +3022,7 @@ ${gapSummary}
         competencyId: z.string(), // 添加能力ID
         selectedOption: z.string(),
         assessedLevel: z.number(),
-        sessionType: z.enum(["initial", "validation"]),
+        sessionType: z.enum(["initial", "validation", "regular", "position"]),
       }))
       .mutation(async ({ ctx, input }) => {
         // 保存答题记录
@@ -3236,7 +3236,7 @@ ${gapSummary}
     // 获取用户的答题记录
     getUserAnswers: protectedProcedure
       .input(z.object({
-        sessionType: z.enum(["initial", "validation"]).optional(),
+        sessionType: z.enum(["initial", "validation", "regular", "position"]).optional(),
       }))
       .query(async ({ ctx, input }) => {
         const answers = await db.getUserAnswers(ctx.user.id, input.sessionType);

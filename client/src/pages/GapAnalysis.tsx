@@ -2,57 +2,56 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
-import PageTransition from "@/components/PageTransition";
-import PageSkeleton from "@/components/PageSkeleton";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import PageContainer from "@/components/PageContainer";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Legend } from 'recharts';
-import { AlertCircle, TrendingUp, Target, BookOpen, ArrowRight } from "lucide-react";
+import { AlertCircle, TrendingUp, Target, BookOpen, ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
 
 export default function GapAnalysis() {
   const [location, navigate] = useLocation();
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
-  
+
   // Fetch user data
   const { data: user } = trpc.auth.me.useQuery();
   const { data: userProfile } = trpc.user.getProfile.useQuery(undefined, {
     enabled: !!user,
   });
-  
+
   // Fetch positions
   const { data: positions, isLoading: positionsLoading } = trpc.positions.getAll.useQuery();
-  
+
   // Fetch user competencies
   const { data: userCompetencies, isLoading: competenciesLoading } = trpc.competencies.getUserCompetencies.useQuery(undefined, {
     enabled: !!user,
   });
-  
+
   // Fetch position competencies when position is selected
   const { data: positionCompetencies, isLoading: positionCompLoading } = trpc.positions.getCompetencies.useQuery(
     { positionId: selectedPosition! },
     { enabled: !!selectedPosition }
   );
-  
+
   // Auto-select user's current position if available
   useEffect(() => {
     if (userProfile?.positionId && !selectedPosition) {
       setSelectedPosition(userProfile.positionId);
     }
   }, [userProfile, selectedPosition]);
-  
+
   const isLoading = positionsLoading || competenciesLoading || (selectedPosition && positionCompLoading);
-  
+
   // Calculate gap data
   const gapData = positionCompetencies?.map(pc => {
     const userComp = userCompetencies?.find(uc => uc.competencyId === pc.competencyId);
     const currentScore = userComp?.finalScore || 0;
     const requiredScore = pc.requiredScore || 60;
     const gap = Math.max(0, requiredScore - currentScore);
-    
+
     return {
       competencyId: pc.competencyId,
       name: pc.competencyName || `Competency ${pc.competencyId}`,
@@ -63,7 +62,7 @@ export default function GapAnalysis() {
       isImportant: pc.isCore || false,
     };
   }) || [];
-  
+
   // Calculate overall statistics
   const stats = {
     totalCompetencies: gapData.length,
@@ -71,18 +70,18 @@ export default function GapAnalysis() {
     averageGap: gapData.length > 0 ? Math.round(gapData.reduce((sum, d) => sum + d.gap, 0) / gapData.length) : 0,
     priorityGaps: gapData.filter(d => d.priority === 'high' && d.gap > 0).length,
   };
-  
-  const completionRate = stats.totalCompetencies > 0 
-    ? Math.round((stats.competenciesMet / stats.totalCompetencies) * 100) 
+
+  const completionRate = stats.totalCompetencies > 0
+    ? Math.round((stats.competenciesMet / stats.totalCompetencies) * 100)
     : 0;
-  
+
   // Prepare radar chart data
   const radarData = gapData.slice(0, 8).map(d => ({
     subject: d.name.length > 15 ? d.name.substring(0, 12) + '...' : d.name,
     current: d.currentScore,
     required: d.requiredScore,
   }));
-  
+
   // Sort gaps by priority
   const sortedGaps = [...gapData].sort((a, b) => {
     if (a.gap === 0 && b.gap > 0) return 1;
@@ -91,27 +90,11 @@ export default function GapAnalysis() {
     if (a.priority !== 'high' && b.priority === 'high') return 1;
     return b.gap - a.gap;
   });
-  
-  if (isLoading) {
-    return (
-      <DashboardLayout>
-        <PageSkeleton />
-      </DashboardLayout>
-    );
-  }
-  
+
   return (
     <DashboardLayout>
-      <PageTransition>
-        <div className="space-y-6">
-          {/* Header */}
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">能力缺口分析</h1>
-            <p className="text-muted-foreground mt-2">
-              对比您的当前能力与目标岗位要求，识别需要提升的能力
-            </p>
-          </div>
-          
+      <PageContainer isLoading={isLoading} pageTitle="能力缺口分析" pageDescription="对比当前能力与目标岗位要求，识别需要提升的能力">
+        <div className="space-y-5">
           {/* Position Selection */}
           <Card>
             <CardHeader>
@@ -141,7 +124,7 @@ export default function GapAnalysis() {
               </Select>
             </CardContent>
           </Card>
-          
+
           {!selectedPosition && (
             <Alert>
               <AlertCircle className="h-4 w-4" />
@@ -150,7 +133,7 @@ export default function GapAnalysis() {
               </AlertDescription>
             </Alert>
           )}
-          
+
           {selectedPosition && gapData.length === 0 && (
             <Alert>
               <AlertCircle className="h-4 w-4" />
@@ -159,68 +142,74 @@ export default function GapAnalysis() {
               </AlertDescription>
             </Alert>
           )}
-          
+
           {selectedPosition && gapData.length > 0 && (
             <>
-              {/* Statistics Overview */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      总体完成度
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl font-bold">{completionRate}%</div>
-                    <Progress value={completionRate} className="mt-3" />
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      能力达标数
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl font-bold">
-                      {stats.competenciesMet}/{stats.totalCompetencies}
+              {/* Statistics Overview — gradient style */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 *:data-[slot=card]:shadow-xs">
+                <Card className="@container/card bg-gradient-to-t from-primary/5 to-card dark:from-primary/10">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">总体完成度</p>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-3">
-                      已达到岗位要求的能力数量
-                    </p>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      平均缺口
-                    </CardTitle>
+                    <div className="text-2xl font-bold tracking-tight tabular-nums">{completionRate}%</div>
                   </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl font-bold">{stats.averageGap}分</div>
-                    <p className="text-xs text-muted-foreground mt-3">
-                      当前分数与要求分数的平均差距
-                    </p>
-                  </CardContent>
+                  <CardFooter className="flex-col items-start gap-1 pt-0 text-xs">
+                    <Progress value={completionRate} className="h-1.5 w-full" />
+                    <div className="text-muted-foreground">岗位达标进度</div>
+                  </CardFooter>
                 </Card>
-                
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      优先提升项
-                    </CardTitle>
+
+                <Card className="@container/card bg-gradient-to-t from-blue-50/50 to-card dark:from-blue-950/30">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">能力达标数</p>
+                      <Target className="h-4 w-4 text-blue-500" />
+                    </div>
+                    <div className="text-2xl font-bold tracking-tight tabular-nums">{stats.competenciesMet}/{stats.totalCompetencies}</div>
                   </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl font-bold">{stats.priorityGaps}项</div>
-                    <p className="text-xs text-muted-foreground mt-3">
-                      高优先级且有缺口的能力
-                    </p>
-                  </CardContent>
+                  <CardFooter className="flex-col items-start gap-1 pt-0 text-xs">
+                    <div className="line-clamp-1 flex gap-1.5 font-medium text-blue-600 dark:text-blue-400">
+                      已达要求 <CheckCircle2 className="size-3.5" />
+                    </div>
+                    <div className="text-muted-foreground">达到岗位要求的能力</div>
+                  </CardFooter>
+                </Card>
+
+                <Card className="@container/card bg-gradient-to-t from-purple-50/50 to-card dark:from-purple-950/30">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">平均缺口</p>
+                      <TrendingUp className="h-4 w-4 text-purple-500" />
+                    </div>
+                    <div className="text-2xl font-bold tracking-tight tabular-nums">{stats.averageGap}分</div>
+                  </CardHeader>
+                  <CardFooter className="flex-col items-start gap-1 pt-0 text-xs">
+                    <div className="line-clamp-1 flex gap-1.5 font-medium text-purple-600 dark:text-purple-400">
+                      待补强 <Sparkles className="size-3.5" />
+                    </div>
+                    <div className="text-muted-foreground">当前与要求的平均差</div>
+                  </CardFooter>
+                </Card>
+
+                <Card className="@container/card bg-gradient-to-t from-amber-50/50 to-card dark:from-amber-950/30">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">优先提升项</p>
+                      <AlertCircle className="h-4 w-4 text-amber-500" />
+                    </div>
+                    <div className="text-2xl font-bold tracking-tight tabular-nums">{stats.priorityGaps}项</div>
+                  </CardHeader>
+                  <CardFooter className="flex-col items-start gap-1 pt-0 text-xs">
+                    <div className="line-clamp-1 flex gap-1.5 font-medium text-amber-600 dark:text-amber-400">
+                      重点突破 <TrendingUp className="size-3.5" />
+                    </div>
+                    <div className="text-muted-foreground">高优先级且有缺口</div>
+                  </CardFooter>
                 </Card>
               </div>
-              
+
               {/* Radar Chart Comparison */}
               <Card>
                 <CardHeader>
@@ -254,7 +243,7 @@ export default function GapAnalysis() {
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
-              
+
               {/* Gap Details */}
               <Card>
                 <CardHeader>
@@ -264,7 +253,7 @@ export default function GapAnalysis() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {sortedGaps.map(gap => (
                       <div key={gap.competencyId} className="border rounded-lg p-4">
                         <div className="flex items-start justify-between mb-3">
@@ -294,33 +283,33 @@ export default function GapAnalysis() {
                             </Badge>
                           )}
                         </div>
-                        
+
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">当前水平</span>
-                            <span className="font-medium">{gap.currentScore}分</span>
+                            <span className="font-medium tabular-nums">{gap.currentScore}分</span>
                           </div>
                           <Progress value={gap.currentScore} className="h-2" />
-                          
+
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">岗位要求</span>
-                            <span className="font-medium">{gap.requiredScore}分</span>
+                            <span className="font-medium tabular-nums">{gap.requiredScore}分</span>
                           </div>
                           <Progress value={gap.requiredScore} className="h-2 bg-red-100" />
                         </div>
-                        
+
                         {gap.gap > 0 && (
                           <div className="mt-4 flex gap-2">
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
                               size="sm"
                               onClick={() => navigate(`/learning-path?competency=${gap.competencyId}`)}
                             >
                               <BookOpen className="w-4 h-4 mr-2" />
                               查看学习路径
                             </Button>
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="sm"
                               onClick={() => navigate(`/assessment?competency=${gap.competencyId}`)}
                             >
@@ -334,7 +323,7 @@ export default function GapAnalysis() {
                   </div>
                 </CardContent>
               </Card>
-              
+
               {/* Recommendations */}
               {stats.priorityGaps > 0 && (
                 <Alert>
@@ -343,8 +332,8 @@ export default function GapAnalysis() {
                     <strong>建议：</strong>
                     您有 {stats.priorityGaps} 项高优先级能力需要提升。
                     建议优先关注这些能力，它们对您的职业发展最为关键。
-                    <Button 
-                      variant="link" 
+                    <Button
+                      variant="link"
                       className="ml-2 p-0 h-auto"
                       onClick={() => navigate('/learning-path')}
                     >
@@ -356,7 +345,7 @@ export default function GapAnalysis() {
             </>
           )}
         </div>
-      </PageTransition>
+      </PageContainer>
     </DashboardLayout>
   );
 }

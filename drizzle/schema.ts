@@ -49,6 +49,7 @@ export const userProfiles = mysqlTable("userProfiles", {
   managementLevel: mysqlEnum("managementLevel", ["executive", "senior", "middle", "junior"]), // 管理级别
   yearsOfManagement: int("yearsOfManagement").default(0), // 管理年限
   directReports: int("directReports").default(0), // 直接下属人数
+  managementLayers: int("managementLayers").default(0), // 管理层级（组织层级数）
   teamSize: int("teamSize").default(0), // 团队总人数
   // 元数据
   profileCompleted: boolean("profileCompleted").default(false).notNull(), // 画像是否完成
