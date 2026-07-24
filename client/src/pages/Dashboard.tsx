@@ -25,7 +25,7 @@ export default function Dashboard() {
   const mastered = userProgress?.filter(c => c.userProgress?.status === 'mastered').length || 0;
   const learning = userProgress?.filter(c => c.userProgress?.status === 'learning').length || 0;
   const totalCount = competencies?.length || 35;
-  const scores = userProgress?.map(c => c.userProgress?.selfAssessed).filter(s => s > 0) || [];
+  const scores = userProgress?.map(c => c.userProgress?.selfAssessmentScore).filter(s => s > 0) || [];
   const avgScore = scores.length > 0
     ? Math.round((scores.reduce((a: number, b: number) => a + b, 0) / scores.length) * 10) / 10
     : 0;
@@ -178,10 +178,10 @@ export default function Dashboard() {
                         <span className="text-sm font-medium flex-1 truncate">{comp.name}</span>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <div className="w-16">
-                            <Progress value={((comp.userProgress?.selfAssessed || 0) / 5) * 100} className="h-1.5" />
+                            <Progress value={((comp.userProgress?.selfAssessmentScore || 0) / 5) * 100} className="h-1.5" />
                           </div>
                           <span className="text-xs text-muted-foreground w-6 text-right tabular-nums">
-                            {comp.userProgress?.selfAssessed || 0}
+                            {comp.userProgress?.selfAssessmentScore || 0}
                           </span>
                         </div>
                         <Badge variant="secondary" className="text-[10px] h-5 px-1.5">

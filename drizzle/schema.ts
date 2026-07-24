@@ -78,8 +78,9 @@ export const competencies = mysqlTable("competencies", {
   id: int("id").autoincrement().primaryKey(),
   domainId: int("domainId").notNull(), // 所属能力域
   name: varchar("name", { length: 255 }).notNull(), // 能力名称
-  category: varchar("category", { length: 100 }).notNull(), // 所属模块（冗余字段，方便查询）
+  category: varchar("category", { length: 100 }).notNull(), // 所属能力域名称（冗余字段，方便分组）
   description: text("description"), // 能力描述
+  levelStandards: text("levelStandards"), // L1-L5 行为锚定标准 (JSON: [{level, score, description, example}, ...])
   isCore: boolean("isCore").default(true).notNull(), // 是否核心能力（通用）
   sortOrder: int("sortOrder").default(0), // 排序
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -551,6 +552,7 @@ export const userChallenges = mysqlTable("userChallenges", {
   selectedAnswer: int("selectedAnswer").notNull(),
   pointsEarned: int("pointsEarned").default(0).notNull(),
   timeSpent: int("timeSpent"), // 答题耗时（秒）
+  attemptNumber: int("attemptNumber").default(1).notNull(), // 尝试次数
   completedAt: timestamp("completedAt").defaultNow().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });

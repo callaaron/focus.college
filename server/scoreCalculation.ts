@@ -1,68 +1,78 @@
 /**
  * 能力评分计算工具函数
- * 
- * 评分来源和权重：
+ *
+ * 评分来源和权重（与 schema competencyScores 表默认权重一致）：
  * - 问卷答题得分（questionnaireScore）: 40% - 最客观，基于标准化测试
- * - AI资料分析得分（aiAssessed）: 35% - 基于实际工作成果
- * - 自我评估得分（selfAssessed）: 25% - 主观参考
+ * - AI分析得分（aiAnalysisScore）: 30% - 基于实际工作成果
+ * - 自我评估得分（selfAssessmentScore）: 20% - 主观参考
+ * - 证据上传得分（evidenceScore）: 10% - 最硬的证据，能力定级主要依据
  */
 
 export interface ScoreComponents {
-  questionnaireScore: number; // 0-5
-  aiAssessed: number; // 0-5
-  selfAssessed: number; // 0-5
+  questionnaireScore: number; // 0-100
+  aiAnalysisScore: number; // 0-100
+  selfAssessmentScore: number; // 0-100
+  evidenceScore: number; // 0-100
 }
 
 export const SCORE_WEIGHTS = {
   questionnaire: 0.40,
-  ai: 0.35,
-  self: 0.25,
+  ai: 0.30,
+  self: 0.20,
+  evidence: 0.10,
 };
 
 /**
  * 计算加权平均得分
- * @param scores 三种评分来源的得分
- * @returns 加权平均得分（0-5）和最终分数（0-100）
+ * @param scores 四种评分来源的得分（0-100）
+ * @returns 加权得分（0-100）和能力等级（1-5）
  */
 export function calculateWeightedScore(scores: ScoreComponents): {
-  weightedLevel: number; // 0-5
   finalScore: number; // 0-100
+  level: number; // 1-5
   breakdown: {
     questionnaire: number;
     ai: number;
     self: number;
+    evidence: number;
   };
 } {
-  const { questionnaireScore, aiAssessed, selfAssessed } = scores;
-  
-  // 计算加权平均（0-5）
-  const weightedLevel = 
+  const { questionnaireScore, aiAnalysisScore, selfAssessmentScore, evidenceScore } = scores;
+
+  // 计算加权平均（0-100）
+  const finalScore = Math.round(
     questionnaireScore * SCORE_WEIGHTS.questionnaire +
-    aiAssessed * SCORE_WEIGHTS.ai +
-    selfAssessed * SCORE_WEIGHTS.self;
-  
-  // 转换为0-100分
-  const finalScore = Math.round(weightedLevel * 20);
-  
+    aiAnalysisScore * SCORE_WEIGHTS.ai +
+    selfAssessmentScore * SCORE_WEIGHTS.self +
+    evidenceScore * SCORE_WEIGHTS.evidence
+  );
+
   // 计算各部分贡献
   const breakdown = {
-    questionnaire: questionnaireScore * SCORE_WEIGHTS.questionnaire,
-    ai: aiAssessed * SCORE_WEIGHTS.ai,
-    self: selfAssessed * SCORE_WEIGHTS.self,
+    questionnaire: Math.round(questionnaireScore * SCORE_WEIGHTS.questionnaire * 10) / 10,
+    ai: Math.round(aiAnalysisScore * SCORE_WEIGHTS.ai * 10) / 10,
+    self: Math.round(selfAssessmentScore * SCORE_WEIGHTS.self * 10) / 10,
+    evidence: Math.round(evidenceScore * SCORE_WEIGHTS.evidence * 10) / 10,
   };
-  
+
+  // 根据分数确定等级：>=80=L4(精通), >=60=L3(发展中), >=40=L2(入门), >=20=L1(初学), <20=L1
+  const level = finalScore >= 80 ? 4 : finalScore >= 60 ? 3 : finalScore >= 40 ? 2 : 1;
+
   return {
-    weightedLevel: Math.round(weightedLevel * 10) / 10, // 保留一位小数
     finalScore,
+    level,
     breakdown,
   };
 }
 
 /**
- * 根据加权得分确定能力等级
- * @param weightedLevel 加权平均得分（0-5）
- * @returns 能力等级（0-5）
+ * 根据分数确定能力等级
+ * @param finalScore 最终得分（0-100）
+ * @returns 能力等级（1-5）
  */
-export function determineLevel(weightedLevel: number): number {
-  return Math.round(weightedLevel);
+export function determineLevel(finalScore: number): number {
+  if (finalScore >= 80) return 4;
+  if (finalScore >= 60) return 3;
+  if (finalScore >= 40) return 2;
+  return 1;
 }

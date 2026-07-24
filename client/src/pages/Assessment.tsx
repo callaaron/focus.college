@@ -67,8 +67,8 @@ export default function Assessment() {
   // Calculate completion stats
   const totalCompetencies = competencies?.length || 0;
   const assessedCount = competencies?.filter(c => 
-    (c.userProgress.selfAssessed || 0) > 0 || 
-    (c.userProgress.aiAssessed || 0) > 0
+    (c.userProgress.selfAssessmentScore || 0) > 0 ||
+    (c.userProgress.aiAnalysisScore || 0) > 0
   ).length || 0;
   const completionRate = totalCompetencies > 0 ? Math.round((assessedCount / totalCompetencies) * 100) : 0;
 

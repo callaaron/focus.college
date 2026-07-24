@@ -52,7 +52,7 @@ export default function Competencies() {
 
   // Calculate category averages
   const categoryAverages = Object.entries(competenciesByCategory || {}).map(([category, comps]) => {
-    const totalScore = comps.reduce((sum, c) => sum + (c.userProgress.selfAssessed || 0) * 20, 0);
+    const totalScore = comps.reduce((sum, c) => sum + (c.userProgress.selfAssessmentScore || 0) * 20, 0);
     const avgScore = comps.length > 0 ? totalScore / comps.length : 0;
 
     return {
@@ -338,19 +338,19 @@ export default function Competencies() {
                                   <div>
                                     <span className="text-muted-foreground">当前等级：</span>
                                     <span className="font-medium">
-                                      {getLevelLabel(comp.userProgress.currentLevel)}
+                                      {getLevelLabel(comp.userProgress.level)}
                                     </span>
                                   </div>
                                   <div>
                                     <span className="text-muted-foreground">自评：</span>
                                     <span className="font-medium tabular-nums">
-                                      {comp.userProgress.selfAssessed || 0}/5
+                                      {comp.userProgress.selfAssessmentScore || 0}/5
                                     </span>
                                   </div>
                                   <div>
                                     <span className="text-muted-foreground">AI评估：</span>
                                     <span className="font-medium tabular-nums">
-                                      {comp.userProgress.aiAssessed || 0}/5
+                                      {comp.userProgress.aiAnalysisScore || 0}/5
                                     </span>
                                   </div>
                                   <div>
@@ -370,10 +370,10 @@ export default function Competencies() {
                               <div className="space-y-1">
                                 <div className="flex justify-between text-xs text-muted-foreground">
                                   <span>掌握度</span>
-                                  <span className="tabular-nums">{(comp.userProgress.currentLevel || 0) * 20}%</span>
+                                  <span className="tabular-nums">{(comp.userProgress.level || 0) * 20}%</span>
                                 </div>
                                 <Progress
-                                  value={(comp.userProgress.currentLevel || 0) * 20}
+                                  value={(comp.userProgress.level || 0) * 20}
                                   className="h-2"
                                 />
                               </div>

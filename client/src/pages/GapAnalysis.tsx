@@ -18,15 +18,15 @@ export default function GapAnalysis() {
 
   // Fetch user data
   const { data: user } = trpc.auth.me.useQuery();
-  const { data: userProfile } = trpc.user.getProfile.useQuery(undefined, {
+  const { data: userProfile } = trpc.profile.get.useQuery(undefined, {
     enabled: !!user,
   });
 
   // Fetch positions
   const { data: positions, isLoading: positionsLoading } = trpc.positions.getAll.useQuery();
 
-  // Fetch user competencies
-  const { data: userCompetencies, isLoading: competenciesLoading } = trpc.competencies.getUserCompetencies.useQuery(undefined, {
+  // Fetch user competencies (myProgress returns competencies with nested userProgress)
+  const { data: userCompetencies, isLoading: competenciesLoading } = trpc.competencies.myProgress.useQuery(undefined, {
     enabled: !!user,
   });
 
@@ -47,8 +47,8 @@ export default function GapAnalysis() {
 
   // Calculate gap data
   const gapData = positionCompetencies?.map(pc => {
-    const userComp = userCompetencies?.find(uc => uc.competencyId === pc.competencyId);
-    const currentScore = userComp?.finalScore || 0;
+    const userComp = userCompetencies?.find(uc => uc.id === pc.competencyId);
+    const currentScore = userComp?.userProgress?.finalScore || 0;
     const requiredScore = pc.requiredScore || 60;
     const gap = Math.max(0, requiredScore - currentScore);
 

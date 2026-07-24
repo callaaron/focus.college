@@ -522,13 +522,39 @@ export async function createCapabilitySnapshot(userId: number) {
 export async function getUserCapabilityTrends(userId: number, months: number) {
   const db = await getDb();
   if (!db) return [];
-  
+
   const startDate = new Date();
   startDate.setMonth(startDate.getMonth() - months);
-  
-  return await db.select().from(competencySnapshots)
+
+  const snapshots = await db.select().from(competencySnapshots)
     .where(and(eq(competencySnapshots.userId, userId), gte(competencySnapshots.snapshotDate, startDate)))
     .orderBy(competencySnapshots.snapshotDate);
+
+  // 按月聚合，计算每月平均分
+  const monthlyMap = new Map<string, { scores: number[]; levels: number[] }>();
+  for (const s of snapshots) {
+    const monthKey = new Date(s.snapshotDate).toISOString().substring(0, 7); // YYYY-MM
+    if (!monthlyMap.has(monthKey)) {
+      monthlyMap.set(monthKey, { scores: [], levels: [] });
+    }
+    const entry = monthlyMap.get(monthKey)!;
+    entry.scores.push(s.score);
+    entry.levels.push(s.level);
+  }
+
+  const trends: { snapshotDate: string; avgScore: number; avgLevel: number; competencyCount: number }[] = [];
+  for (const [monthKey, data] of monthlyMap.entries()) {
+    const avgScore = Math.round(data.scores.reduce((a, b) => a + b, 0) / data.scores.length);
+    const avgLevel = Math.round(data.levels.reduce((a, b) => a + b, 0) / data.levels.length);
+    trends.push({
+      snapshotDate: `${monthKey}-15`,
+      avgScore,
+      avgLevel,
+      competencyCount: data.scores.length,
+    });
+  }
+
+  return trends.sort((a, b) => a.snapshotDate.localeCompare(b.snapshotDate));
 }
 
 // ==================== Wiki ====================

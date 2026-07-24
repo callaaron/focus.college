@@ -671,16 +671,16 @@ ${context}
         const comp = allComps.find(c => c.id === uc.competencyId);
         const { finalScore } = calculateWeightedScore({
           questionnaireScore: uc.questionnaireScore || 0,
-          aiAssessed: uc.aiAssessed || 0,
-          selfAssessed: uc.selfAssessed || 0,
+          aiAnalysisScore: uc.aiAnalysisScore || 0,
+          selfAssessmentScore: uc.selfAssessmentScore || 0,
         });
         
         return {
           competency: comp,
           finalScore,
           questionnaireScore: uc.questionnaireScore || 0,
-          aiAssessed: uc.aiAssessed || 0,
-          selfAssessed: uc.selfAssessed || 0,
+          aiAnalysisScore: uc.aiAnalysisScore || 0,
+          selfAssessmentScore: uc.selfAssessmentScore || 0,
         };
       });
       
@@ -693,19 +693,19 @@ ${context}
       // 识别自评偏差（自评与客观评分差异>1级）
       const biases = competencyScores
         .filter(cs => {
-          const objectiveScore = (cs.questionnaireScore * 0.6 + cs.aiAssessed * 0.4);
-          return Math.abs(cs.selfAssessed - objectiveScore) > 1;
+          const objectiveScore = (cs.questionnaireScore * 0.6 + cs.aiAnalysisScore * 0.4);
+          return Math.abs(cs.selfAssessmentScore - objectiveScore) > 1;
         })
         .map(cs => ({
           ...cs,
-          bias: cs.selfAssessed - (cs.questionnaireScore * 0.6 + cs.aiAssessed * 0.4),
+          bias: cs.selfAssessmentScore - (cs.questionnaireScore * 0.6 + cs.aiAnalysisScore * 0.4),
         }));
       
       // 生成AI建议
       const prompt = `作为一名管理能力提升顾问，请基于以下数据生成个性化的能力提升建议：
 
 **能力短板：**
-${weaknesses.map(w => `- ${w.competency?.name}：综合得分${w.finalScore}分（问卷${w.questionnaireScore}/5、AI分析${w.aiAssessed}/5、自评${w.selfAssessed}/5）`).join('\n')}
+${weaknesses.map(w => `- ${w.competency?.name}：综合得分${w.finalScore}分（问卷${w.questionnaireScore}/5、AI分析${w.aiAnalysisScore}/5、自评${w.selfAssessmentScore}/5）`).join('\n')}
 
 **自评偏差：**
 ${biases.slice(0, 3).map(b => `- ${b.competency?.name}：${b.bias > 0 ? '自评过高' : '自评过低'}（偏差${Math.abs(b.bias).toFixed(1)}级）`).join('\n')}
@@ -732,8 +732,8 @@ ${biases.slice(0, 3).map(b => `- ${b.competency?.name}：${b.bias > 0 ? '自评�
           category: w.competency?.category,
           finalScore: w.finalScore,
           questionnaireScore: w.questionnaireScore,
-          aiAssessed: w.aiAssessed,
-          selfAssessed: w.selfAssessed,
+          aiAnalysisScore: w.aiAnalysisScore,
+          selfAssessmentScore: w.selfAssessmentScore,
         })),
         biases: biases.slice(0, 3).map(b => ({
           name: b.competency?.name,
@@ -754,9 +754,9 @@ ${biases.slice(0, 3).map(b => `- ${b.competency?.name}：${b.bias > 0 ? '自评�
         return {
           ...comp,
           userProgress: userComp || {
-            currentLevel: 0,
-            selfAssessed: 0,
-            aiAssessed: 0,
+            level: 0,
+            selfAssessmentScore: 0,
+            aiAnalysisScore: 0,
             practiceCount: 0,
             status: "not_started" as const
           }
@@ -768,7 +768,7 @@ ${biases.slice(0, 3).map(b => `- ${b.competency?.name}：${b.bias > 0 ? '自评�
     updateProgress: protectedProcedure
       .input(z.object({
         competencyId: z.number(),
-        selfAssessed: z.number().optional(),
+        selfAssessmentScore: z.number().optional(),
         status: z.enum(["not_started", "learning", "mastered"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -777,9 +777,9 @@ ${biases.slice(0, 3).map(b => `- ${b.competency?.name}：${b.bias > 0 ? '自评�
         await db.upsertUserCompetency({
           userId: ctx.user.id,
           competencyId: input.competencyId,
-          selfAssessed: input.selfAssessed ?? existing?.selfAssessed ?? 0,
-          currentLevel: existing?.currentLevel ?? 0,
-          aiAssessed: existing?.aiAssessed ?? 0,
+          selfAssessmentScore: input.selfAssessmentScore ?? existing?.selfAssessmentScore ?? 0,
+          level: existing?.level ?? 0,
+          aiAnalysisScore: existing?.aiAnalysisScore ?? 0,
           practiceCount: existing?.practiceCount ?? 0,
           status: input.status ?? existing?.status ?? "not_started",
         });
@@ -814,47 +814,47 @@ ${biases.slice(0, 3).map(b => `- ${b.competency?.name}：${b.bias > 0 ? '自评�
         score: Math.round(data.total / data.count) || 0
       }));
       
-      // 模拟行业平均数据（基于行业和职位）
-      // 在实际场景中，这里应该从数据库统计真实用户数据
+      // 行业平均参考值（基于 DB 的 8 个能力域）
+      // 注：这是参考值，非真实统计。后续应改为从 DB 统计真实用户数据
       const industryAverages: Record<string, number> = {
-        "战略规划": 65,
-        "创新变革": 62,
-        "决策思维": 68,
-        "业务执行": 70,
-        "沟通协作": 72,
-        "自我管理": 66,
-        "团队管理": 64,
-        "人才发展": 60,
+        "战略领导力": 65,
+        "产品创新": 62,
+        "市场营销": 64,
+        "团队管理": 66,
+        "运营管理": 68,
+        "财务能力": 60,
+        "资源整合": 63,
+        "创业心态": 67,
       };
       
       // 根据行业调整基准值
       if (userProfile?.industry) {
         if (userProfile.industry.includes("互联网") || userProfile.industry.includes("科技")) {
-          industryAverages["创新变革"] += 5;
-          industryAverages["决策思维"] += 3;
+          industryAverages["产品创新"] += 5;
+          industryAverages["创业心态"] += 3;
         }
         if (userProfile.industry.includes("制造") || userProfile.industry.includes("生产")) {
-          industryAverages["业务执行"] += 5;
+          industryAverages["运营管理"] += 5;
           industryAverages["团队管理"] += 3;
         }
         if (userProfile.industry.includes("金融") || userProfile.industry.includes("咨询")) {
-          industryAverages["战略规划"] += 5;
-          industryAverages["决策思维"] += 5;
+          industryAverages["战略领导力"] += 5;
+          industryAverages["财务能力"] += 5;
         }
       }
       
       // 根据职位调整基准值
       if (userProfile?.currentRole) {
         if (userProfile.currentRole.includes("CEO") || userProfile.currentRole.includes("总裁")) {
-          industryAverages["战略规划"] += 8;
-          industryAverages["决策思维"] += 8;
+          industryAverages["战略领导力"] += 8;
+          industryAverages["创业心态"] += 8;
         }
         if (userProfile.currentRole.includes("CTO") || userProfile.currentRole.includes("技术")) {
-          industryAverages["创新变革"] += 8;
-          industryAverages["业务执行"] += 5;
+          industryAverages["产品创新"] += 8;
+          industryAverages["资源整合"] += 5;
         }
         if (userProfile.currentRole.includes("COO") || userProfile.currentRole.includes("运营")) {
-          industryAverages["业务执行"] += 8;
+          industryAverages["运营管理"] += 8;
           industryAverages["团队管理"] += 5;
         }
       }
@@ -1108,12 +1108,19 @@ ${biases.slice(0, 3).map(b => `- ${b.competency?.name}：${b.bias > 0 ? '自评�
         const competency = await db.getCompetencyById(input.competencyId);
         if (!competency) throw new Error("Competency not found");
 
+        const levelStandards = competency.levelStandards
+          ? JSON.parse(competency.levelStandards)
+          : [];
+        const l1Desc = levelStandards.find((l: any) => l.level === 1)?.description || '未定义';
+        const l2Desc = levelStandards.find((l: any) => l.level === 2)?.description || '未定义';
+        const l3Desc = levelStandards.find((l: any) => l.level === 3)?.description || '未定义';
+
         const evalPrompt = `评估以下证据材料，判断用户在"${competency.name}"这项管理能力上的掌握程度。
 
 能力描述：${competency.description}
-L1标准：${competency.level1Criteria}
-L2标准：${competency.level2Criteria}
-L3标准：${competency.level3Criteria}
+L1标准：${l1Desc}
+L2标准：${l2Desc}
+L3标准：${l3Desc}
 
 证据材料：
 ${input.evidenceContent}
@@ -1168,11 +1175,11 @@ ${input.evidenceContent}
         await db.upsertUserCompetency({
           userId: ctx.user.id,
           competencyId: input.competencyId,
-          currentLevel: Math.max(existing?.currentLevel || 0, evalResult.assessedLevel),
-          selfAssessed: existing?.selfAssessed || 0,
-          aiAssessed: evalResult.assessedLevel,
+          level: Math.max(existing?.level || 0, evalResult.assessedLevel),
+          selfAssessmentScore: existing?.selfAssessmentScore || 0,
+          aiAnalysisScore: evalResult.assessedLevel,
           practiceCount: (existing?.practiceCount || 0) + 1,
-          lastPracticed: new Date(),
+          lastPracticeAt: new Date(),
           status: evalResult.assessedLevel >= 3 ? "mastered" : evalResult.assessedLevel >= 1 ? "learning" : "not_started",
         });
 
@@ -1219,12 +1226,19 @@ ${input.evidenceContent}
         const competency = await db.getCompetencyById(input.competencyId);
         if (!competency) throw new Error("Competency not found");
 
+        const levelStandards = competency.levelStandards
+          ? JSON.parse(competency.levelStandards)
+          : [];
+        const l1Desc = levelStandards.find((l: any) => l.level === 1)?.description || '未定义';
+        const l2Desc = levelStandards.find((l: any) => l.level === 2)?.description || '未定义';
+        const l3Desc = levelStandards.find((l: any) => l.level === 3)?.description || '未定义';
+
         const evalPrompt = `评估以下证据材料，判断用户在“${competency.name}”这项管理能力上的掌握程度。
 
 能力描述：${competency.description}
-L1标准：${competency.level1Criteria}
-L2标准：${competency.level2Criteria}
-L3标准：${competency.level3Criteria}
+L1标准：${l1Desc}
+L2标准：${l2Desc}
+L3标准：${l3Desc}
 
 证据材料：
 ${evidenceText}
@@ -1278,11 +1292,11 @@ ${evidenceText}
         await db.upsertUserCompetency({
           userId: ctx.user.id,
           competencyId: input.competencyId,
-          currentLevel: Math.max(existing?.currentLevel || 0, evalResult.assessedLevel),
-          selfAssessed: existing?.selfAssessed || 0,
-          aiAssessed: evalResult.assessedLevel,
+          level: Math.max(existing?.level || 0, evalResult.assessedLevel),
+          selfAssessmentScore: existing?.selfAssessmentScore || 0,
+          aiAnalysisScore: evalResult.assessedLevel,
           practiceCount: (existing?.practiceCount || 0) + 1,
-          lastPracticed: new Date(),
+          lastPracticeAt: new Date(),
           status: evalResult.assessedLevel >= 3 ? "mastered" : evalResult.assessedLevel >= 1 ? "learning" : "not_started",
         });
 
@@ -1513,12 +1527,12 @@ ${allCompetencies.map((c, i) => `${i + 1}. ${c.name} (${c.category}) - ${c.descr
               userId: ctx.user.id,
               competencyId: competency.id,
               score: comp.score,
-              currentLevel: comp.level,
-              selfAssessed: 0, // 默认值，等待用户自评
-              aiAssessed: comp.level,
+              level: comp.level,
+              selfAssessmentScore: 0, // 默认值，等待用户自评
+              aiAnalysisScore: comp.level,
               status: comp.score >= 80 ? 'mastered' : comp.score >= 60 ? 'learning' : 'not_started',
               practiceCount: 1,
-              lastPracticed: new Date() // 记录最后实践时间
+              lastPracticeAt: new Date() // 记录最后实践时间
             });
           }
         }
@@ -1591,6 +1605,22 @@ ${allCompetencies.map((c, i) => `${i + 1}. ${c.name} (${c.category}) - ${c.descr
 
         const userDetail = await db.getUserDetailForAdmin(input.userId);
         return userDetail;
+      }),
+
+    // 手动触发能力快照
+    triggerSnapshot: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        if (ctx.user.role !== 'admin') {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Only administrators can trigger snapshots"
+          });
+        }
+
+        const { manualSnapshotTrigger } = await import("./cronJobs");
+        const result = await manualSnapshotTrigger();
+
+        return result;
       }),
 
     // ========== 行业管理 ==========
@@ -2143,41 +2173,6 @@ ${profileInfo}
           aiAnalysis,
           aiSuggestions,
         };
-      }),
-
-    // 获取用户能力趋势数据
-    getUserCapabilityTrends: protectedProcedure
-      .input(z.object({
-        months: z.number().default(6),
-      }))
-      .query(async ({ ctx, input }) => {
-        const database = await getDb();
-        if (!database) {
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-        }
-
-        // 获取用户能力评分历史（简化版：基于评估会话时间）
-        const userCompetencies = await db.getUserCompetencies(ctx.user.id);
-        if (!userCompetencies || userCompetencies.length === 0) {
-          return [];
-        }
-
-        // 计算平均分并按月份分组（简化示例）
-        const avgScore = userCompetencies.reduce((sum, c) => sum + c.score, 0) / userCompetencies.length;
-        
-        // 生成最近N个月的趋势数据（简化：使用当前分数）
-        const trends = [];
-        const now = new Date();
-        for (let i = input.months - 1; i >= 0; i--) {
-          const date = new Date(now);
-          date.setMonth(date.getMonth() - i);
-          trends.push({
-            snapshotDate: date.toISOString().split('T')[0],
-            avgScore: avgScore * (0.8 + (input.months - i) * 0.04), // 模拟增长
-          });
-        }
-
-        return trends;
       }),
 
     // 获取公司信息
@@ -2752,9 +2747,9 @@ ${gapSummary}
             competencyCategory: pc.competencyCategory,
             requiredLevel: pc.requiredLevel,
             importance: pc.importance,
-            currentLevel: userComp?.currentLevel || 0,
+            level: userComp?.level || 0,
             currentScore: userComp?.score || 0,
-            gap: pc.requiredLevel - (userComp?.currentLevel || 0),
+            gap: pc.requiredLevel - (userComp?.level || 0),
           };
         });
         
@@ -2806,6 +2801,77 @@ ${gapSummary}
 
   // ==================== 问卷评估 ====================
   assessment: router({
+    // 获取评估结果（聚合计算维度得分和能力明细）
+    getResults: protectedProcedure
+      .input(z.object({ sessionId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const database = await db.getDb();
+        if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+
+        const answers = await database.select().from(userAnswers)
+          .where(and(
+            eq(userAnswers.sessionId, input.sessionId),
+            eq(userAnswers.userId, ctx.user.id)
+          ));
+
+        const allCompetencies = await db.getAllCompetencies();
+
+        // 按能力分组计算
+        const competencyMap: Record<number, { scores: number[]; questionCount: number }> = {};
+        answers.forEach(ans => {
+          if (!competencyMap[ans.competencyId]) {
+            competencyMap[ans.competencyId] = { scores: [], questionCount: 0 };
+          }
+          competencyMap[ans.competencyId].scores.push(ans.score);
+          competencyMap[ans.competencyId].questionCount++;
+        });
+
+        const competencyResults = Object.entries(competencyMap).map(([compId, data]) => {
+          const comp = allCompetencies.find(c => c.id === Number(compId));
+          const avgScore = Math.round(data.scores.reduce((a, b) => a + b, 0) / data.scores.length);
+          const level = avgScore >= 80 ? 4 : avgScore >= 60 ? 3 : avgScore >= 40 ? 2 : 1;
+          return {
+            competencyId: Number(compId),
+            competencyName: comp?.name || `能力 ${compId}`,
+            category: comp?.category || '未分类',
+            level,
+            avgScore,
+            questionCount: data.questionCount,
+          };
+        });
+
+        // 按维度分组
+        const categoryMap: Record<string, { scores: number[]; count: number }> = {};
+        competencyResults.forEach(cr => {
+          if (!categoryMap[cr.category]) {
+            categoryMap[cr.category] = { scores: [], count: 0 };
+          }
+          categoryMap[cr.category].scores.push(cr.avgScore);
+          categoryMap[cr.category].count++;
+        });
+
+        const categoryResults = Object.entries(categoryMap).map(([category, data]) => {
+          const avgScore = Math.round(data.scores.reduce((a, b) => a + b, 0) / data.scores.length);
+          const level = avgScore >= 80 ? 4 : avgScore >= 60 ? 3 : avgScore >= 40 ? 2 : 1;
+          return { category, level, avgScore };
+        });
+
+        // 总分
+        const allScores = answers.map(a => a.score);
+        const overallScore = allScores.length > 0
+          ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length)
+          : 0;
+        const overallLevel = overallScore >= 80 ? 4 : overallScore >= 60 ? 3 : overallScore >= 40 ? 2 : 1;
+
+        return {
+          totalAnswered: answers.length,
+          overallScore,
+          overallLevel,
+          categoryResults,
+          competencyResults,
+        };
+      }),
+
     // 获取历史评估数据（用于成长报告）
     getHistoryData: protectedProcedure
       .input(z.object({
@@ -2851,11 +2917,8 @@ ${gapSummary}
         // 获取所有答题记录
         const answers = await db.getUserAnswers(ctx.user.id);
         
-        // 计算8个维度的历史趋势数据
-        const categories = [
-          '战略规划', '创新变革', '决策思维', '业务执行',
-          '沟通协作', '自我管理', '团队管理', '人才发展'
-        ];
+        // 从能力数据中动态提取能力域名（与 DB 保持一致）
+        const categories = [...new Set(allCompetencies.map(c => c.category))];
         
         // 按类别分组当前能力
         const categoryScores: Record<string, number[]> = {};
@@ -3116,15 +3179,15 @@ ${gapSummary}
         const allUserCompetencies = await db.getUserCompetencies(ctx.user.id);
         const existingCompetency = allUserCompetencies.find(c => c.competencyId === competency.id);
         
-        // 使用公式计算综合得分：score = (selfAssessed * 0.2 + aiAssessed * 0.3 + questionnaireScore * 0.5) * 20
-        const selfAssessed = existingCompetency?.selfAssessed || 0;
-        const aiAssessed = existingCompetency?.aiAssessed || 0;
+        // 使用公式计算综合得分：score = (selfAssessmentScore * 0.2 + aiAnalysisScore * 0.3 + questionnaireScore * 0.5) * 20
+        const selfAssessmentScore = existingCompetency?.selfAssessmentScore || 0;
+        const aiAnalysisScore = existingCompetency?.aiAnalysisScore || 0;
         const questionnaireScore = avgQuestionnaireLevel;
         
         const { weightedLevel, finalScore } = calculateWeightedScore({
           questionnaireScore,
-          aiAssessed,
-          selfAssessed,
+          aiAnalysisScore,
+          selfAssessmentScore,
         });
         const newLevel = determineLevel(weightedLevel);
         
@@ -3132,13 +3195,13 @@ ${gapSummary}
         await db.upsertUserCompetency({
           userId: ctx.user.id,
           competencyId: competency.id,
-          currentLevel: newLevel,
-          selfAssessed,
-          aiAssessed,
+          level: newLevel,
+          selfAssessmentScore,
+          aiAnalysisScore,
           questionnaireScore,
           score: finalScore,
           practiceCount: existingCompetency?.practiceCount || 0,
-          lastPracticed: existingCompetency?.lastPracticed,
+          lastPracticeAt: existingCompetency?.lastPracticeAt,
           status: finalScore >= 80 ? 'mastered' : finalScore >= 60 ? 'learning' : 'not_started',
         });
         
@@ -3182,42 +3245,42 @@ ${gapSummary}
             const newQuestionnaireScore = answer.assessedLevel;
             const { weightedLevel, finalScore } = calculateWeightedScore({
               questionnaireScore: newQuestionnaireScore,
-              aiAssessed: existingCompetency.aiAssessed || 0,
-              selfAssessed: existingCompetency.selfAssessed || 0,
+              aiAnalysisScore: existingCompetency.aiAnalysisScore || 0,
+              selfAssessmentScore: existingCompetency.selfAssessmentScore || 0,
             });
             const newLevel = determineLevel(weightedLevel);
             
             await db.upsertUserCompetency({
               userId: ctx.user.id,
               competencyId: competency.id,
-              currentLevel: newLevel,
-              selfAssessed: existingCompetency.selfAssessed,
-              aiAssessed: existingCompetency.aiAssessed,
+              level: newLevel,
+              selfAssessmentScore: existingCompetency.selfAssessmentScore,
+              aiAnalysisScore: existingCompetency.aiAnalysisScore,
               questionnaireScore: newQuestionnaireScore,
               score: finalScore,
               practiceCount: existingCompetency.practiceCount,
-              lastPracticed: existingCompetency.lastPracticed,
+              lastPracticeAt: existingCompetency.lastPracticeAt,
               status: finalScore >= 80 ? 'mastered' : finalScore >= 60 ? 'learning' : 'not_started',
             });
           } else {
             // 创建新的能力记录（只有问卷得分）
             const { weightedLevel, finalScore } = calculateWeightedScore({
               questionnaireScore: answer.assessedLevel,
-              aiAssessed: 0,
-              selfAssessed: 0,
+              aiAnalysisScore: 0,
+              selfAssessmentScore: 0,
             });
             const newLevel = determineLevel(weightedLevel);
             
             await db.upsertUserCompetency({
               userId: ctx.user.id,
               competencyId: competency.id,
-              currentLevel: newLevel,
-              selfAssessed: 0,
-              aiAssessed: 0,
+              level: newLevel,
+              selfAssessmentScore: 0,
+              aiAnalysisScore: 0,
               questionnaireScore: answer.assessedLevel,
               score: finalScore,
               practiceCount: 0,
-              lastPracticed: new Date(),
+              lastPracticeAt: new Date(),
               status: "learning",
             });
           }
@@ -3413,9 +3476,9 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
         }
         
         const userCompetency = await db.getUserCompetency(ctx.user.id, competency.id);
-        const currentLevel = userCompetency ? Math.round(userCompetency.currentLevel) : 1;
+        const level = userCompetency ? Math.round(userCompetency.level) : 1;
         
-        if (currentLevel >= input.targetLevel) {
+        if (level >= input.targetLevel) {
           throw new TRPCError({ 
             code: "BAD_REQUEST", 
             message: "您的当前能力等级已达到或超过目标等级" 
@@ -3427,7 +3490,7 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
 
 **能力名称**：${competency.name}
 **能力描述**：${competency.description}
-**当前等级**：L${currentLevel}
+**当前等级**：L${level}
 **目标等级**：L${input.targetLevel}
 
 请提供：
@@ -3520,7 +3583,7 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
         const pathId = await db.createLearningPath({
           userId: ctx.user.id,
           competencyId: input.competencyId,
-          currentLevel,
+          level,
           targetLevel: input.targetLevel,
           title: pathData.title,
           description: pathData.description,
@@ -3636,7 +3699,7 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
         const userCompetency = await db.getUserCompetency(ctx.user.id, competency.id);
         
         const currentScore = userCompetency?.score || 0;
-        const currentLevel = userCompetency?.currentLevel || 1;
+        const level = userCompetency?.level || 1;
         
         // 使用AI生成个性化资源推荐
         const prompt = `作为一位经验丰富的管理能力发展顾问，请为以下能力发展需求推荐学习资源：
@@ -3644,7 +3707,7 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
 **能力名称**：${competency.name}
 **能力描述**：${competency.description}
 **当前分数**：${currentScore}/100
-**当前等级**：L${Math.round(currentLevel)}
+**当前等级**：L${Math.round(level)}
 
 请推荐5-8个最适合当前水平的学习资源，帮助用户提升该能力。资源类型包括：
 - 文章（article）：权威文章、案例分析、行业报告
@@ -3657,7 +3720,7 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
 - description: 详细描述（为什么推荐、能学到什么）
 - url: 链接（真实可访问的链接，如果没有则为空字符串）
 - author: 作者或机构
-- difficulty: "beginner"|"intermediate"|"advanced"（根据当前等级L${Math.round(currentLevel)}推荐合适难度）
+- difficulty: "beginner"|"intermediate"|"advanced"（根据当前等级L${Math.round(level)}推荐合适难度）
 - estimatedTime: 预计学习时长（如"30分钟"、"2小时"、"1周"）
 - reason: 推荐理由（1-2句话说明为什么适合当前水平）
 
@@ -3725,7 +3788,7 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
             id: competency.id,
             name: competency.name,
             currentScore,
-            currentLevel: Math.round(currentLevel),
+            level: Math.round(level),
           },
           resources: result.resources || [],
         };
@@ -3786,7 +3849,7 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
         
         for (const posComp of positionCompetencies) {
           const userComp = userCompetencies.find(uc => uc.competencyId === posComp.competencyId);
-          const userLevel = userComp ? userComp.currentLevel : 0;
+          const userLevel = userComp ? userComp.level : 0;
           const requiredLevel = posComp.requiredLevel;
           const importance = posComp.importance;
           
@@ -3798,7 +3861,7 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
           if (userLevel < requiredLevel) {
             gaps.push({
               competencyName: posComp.competencyName,
-              currentLevel: userLevel,
+              level: userLevel,
               requiredLevel,
               gap: requiredLevel - userLevel,
             });
@@ -3867,15 +3930,15 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
         
         for (const targetComp of targetCompetencies) {
           const currentComp = currentCompetencies.find(c => c.competencyId === targetComp.competencyId);
-          const currentLevel = currentComp?.requiredLevel || 0;
+          const level = currentComp?.requiredLevel || 0;
           const targetLevel = targetComp.requiredLevel;
           
-          if (targetLevel > currentLevel) {
+          if (targetLevel > level) {
             competenciesToImprove.push({
               competencyName: targetComp.competencyName,
-              currentLevel,
+              level,
               targetLevel,
-              gap: targetLevel - currentLevel,
+              gap: targetLevel - level,
               importance: targetComp.importance,
             });
           }
@@ -4285,46 +4348,6 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
         }
         
         return await query;
-      }),
-  }),
-
-  // ==================== 管理员功能 ====================
-  admin: router({
-    // 手动触发能力快照
-    triggerSnapshot: protectedProcedure
-      .mutation(async ({ ctx }) => {
-        // Check if user is admin
-        if (ctx.user.role !== 'admin') {
-          throw new TRPCError({ 
-            code: "FORBIDDEN", 
-            message: "Only administrators can trigger snapshots" 
-          });
-        }
-        
-        const { manualSnapshotTrigger } = await import("./cronJobs");
-        const result = await manualSnapshotTrigger();
-        
-        return result;
-      }),
-    
-    // 获取系统统计信息
-    getStats: protectedProcedure
-      .query(async ({ ctx }) => {
-        if (ctx.user.role !== 'admin') {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
-        }
-        
-        return await db.getAdminStats();
-      }),
-    
-    // 获取所有用户
-    getAllUsers: protectedProcedure
-      .query(async ({ ctx }) => {
-        if (ctx.user.role !== 'admin') {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
-        }
-        
-        return await db.getAllUsersWithStats();
       }),
   }),
 
