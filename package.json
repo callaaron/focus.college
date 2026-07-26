@@ -5,22 +5,16 @@
   "license": "MIT",
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
-    "dev:d1": "wrangler pages dev dist --d1=DB --port=3000",
     "dev:vite": "vite",
     "build": "vite build",
     "build:legacy": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
-    "preview": "wrangler pages dev dist --d1=DB",
-    "deploy": "npm run build && wrangler pages deploy dist",
     "deploy:quick": "bash scripts/quick-deploy.sh",
     "deploy:direct": "bash scripts/direct-deploy.sh",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
-    "db:push": "drizzle-kit generate && drizzle-kit migrate",
-    "db:generate:d1": "drizzle-kit generate --config=drizzle.config.d1.ts",
-    "db:migrate:local": "wrangler d1 migrations apply focus-college-db --local",
-    "db:migrate:remote": "wrangler d1 migrations apply focus-college-db --remote"
+    "db:push": "drizzle-kit generate && drizzle-kit migrate"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",

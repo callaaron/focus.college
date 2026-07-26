@@ -9,8 +9,6 @@ import { systemRouter } from "./_core/systemRouter";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import * as db from "./db";
-import * as demoAccountsDb from "./demo-accounts-db";
-import * as demoAnalyticsDb from "./demo-analytics-db";
 import * as wikiDb from "./db/wiki";
 import { getDb } from "./db";
 import { calculateWeightedScore, determineLevel } from "./scoreCalculation";
@@ -358,6 +356,31 @@ ${competenciesContext}
           identifiedCompetencies: JSON.stringify(aiResult.competencies),
           companyStage: input.companyStage || "seed",
         });
+
+        // 场景分析识别的能力 → 提升对应能力 evidenceScore（打通场景→能力分闭环）
+        if (aiResult.competencies && Array.isArray(aiResult.competencies)) {
+          const allCompetencies = await db.getAllCompetencies();
+          for (const identified of aiResult.competencies) {
+            // 按 name 模糊匹配 DB 能力
+            const matched = allCompetencies.find(c =>
+              c.name === identified.name ||
+              c.name.includes(identified.name) ||
+              identified.name.includes(c.name)
+            );
+            if (matched) {
+              const existing = await db.getUserCompetency(ctx.user.id, matched.id);
+              const bonus = Math.min(10, (identified.importance || 3) * 2);
+              const newEvidenceScore = Math.min(100, (existing?.evidenceScore || 0) + bonus);
+              await db.upsertUserCompetency({
+                userId: ctx.user.id,
+                competencyId: matched.id,
+                evidenceScore: newEvidenceScore,
+                practiceCount: (existing?.practiceCount || 0) + 1,
+                lastPracticeAt: new Date(),
+              });
+            }
+          }
+        }
 
         return aiResult;
       }),
@@ -1106,7 +1129,7 @@ ${biases.slice(0, 3).map(b => `- ${b.competency?.name}：${b.bias > 0 ? '自评�
       .mutation(async ({ ctx, input }) => {
         // 使用AI评估能力掌握程度
         const competency = await db.getCompetencyById(input.competencyId);
-        if (!competency) throw new Error("Competency not found");
+        if (!competency) throw new TRPCError({ code: "NOT_FOUND", message: "能力不存在" });
 
         const levelStandards = competency.levelStandards
           ? JSON.parse(competency.levelStandards)
@@ -1170,17 +1193,17 @@ ${input.evidenceContent}
           assessedLevel: evalResult.assessedLevel,
         });
 
-        // 更新用户能力进度
+        // 更新用户能力进度（证据评估结果写入 evidenceScore，非 aiAnalysisScore）
+        // assessedLevel 0-5 转换为 0-100 分制（L1=20, L2=40, L3=60, L4=80, L5=100）
         const existing = await db.getUserCompetency(ctx.user.id, input.competencyId);
+        const evidenceScore = Math.min(100, evalResult.assessedLevel * 20);
         await db.upsertUserCompetency({
           userId: ctx.user.id,
           competencyId: input.competencyId,
-          level: Math.max(existing?.level || 0, evalResult.assessedLevel),
-          selfAssessmentScore: existing?.selfAssessmentScore || 0,
-          aiAnalysisScore: evalResult.assessedLevel,
+          evidenceScore,
           practiceCount: (existing?.practiceCount || 0) + 1,
           lastPracticeAt: new Date(),
-          status: evalResult.assessedLevel >= 3 ? "mastered" : evalResult.assessedLevel >= 1 ? "learning" : "not_started",
+          status: evidenceScore >= 80 ? "mastered" : evidenceScore >= 20 ? "learning" : "not_started",
         });
 
         // 自动更新企业能力评分
@@ -1215,7 +1238,7 @@ ${input.evidenceContent}
           if ('text' in transcription) {
             evidenceText = transcription.text;
           } else {
-            throw new Error("语音转文字失败：" + transcription.error);
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "语音转文字失败：" + transcription.error });
           }
         } else {
           // 对于文档，直接使用文本内容
@@ -1224,7 +1247,7 @@ ${input.evidenceContent}
         
         // 调用评估API
         const competency = await db.getCompetencyById(input.competencyId);
-        if (!competency) throw new Error("Competency not found");
+        if (!competency) throw new TRPCError({ code: "NOT_FOUND", message: "能力不存在" });
 
         const levelStandards = competency.levelStandards
           ? JSON.parse(competency.levelStandards)
@@ -1287,17 +1310,17 @@ ${evidenceText}
           assessedLevel: evalResult.assessedLevel,
         });
 
-        // 更新用户能力进度
+        // 更新用户能力进度（证据评估结果写入 evidenceScore，非 aiAnalysisScore）
+        // assessedLevel 0-5 转换为 0-100 分制（L1=20, L2=40, L3=60, L4=80, L5=100）
         const existing = await db.getUserCompetency(ctx.user.id, input.competencyId);
+        const evidenceScore = Math.min(100, evalResult.assessedLevel * 20);
         await db.upsertUserCompetency({
           userId: ctx.user.id,
           competencyId: input.competencyId,
-          level: Math.max(existing?.level || 0, evalResult.assessedLevel),
-          selfAssessmentScore: existing?.selfAssessmentScore || 0,
-          aiAnalysisScore: evalResult.assessedLevel,
+          evidenceScore,
           practiceCount: (existing?.practiceCount || 0) + 1,
           lastPracticeAt: new Date(),
-          status: evalResult.assessedLevel >= 3 ? "mastered" : evalResult.assessedLevel >= 1 ? "learning" : "not_started",
+          status: evidenceScore >= 80 ? "mastered" : evidenceScore >= 20 ? "learning" : "not_started",
         });
 
         return {
@@ -1576,7 +1599,7 @@ ${allCompetencies.map((c, i) => `${i + 1}. ${c.name} (${c.category}) - ${c.descr
     getStats: protectedProcedure.query(async ({ ctx }) => {
       // 检查管理员权限
       if (ctx.user.role !== 'admin') {
-        throw new Error('无权限访问');
+        throw new TRPCError({ code: "FORBIDDEN", message: '无权限访问' });
       }
 
       const stats = await db.getAdminStats();
@@ -1587,7 +1610,7 @@ ${allCompetencies.map((c, i) => `${i + 1}. ${c.name} (${c.category}) - ${c.descr
     getAllUsers: protectedProcedure.query(async ({ ctx }) => {
       // 检查管理员权限
       if (ctx.user.role !== 'admin') {
-        throw new Error('无权限访问');
+        throw new TRPCError({ code: "FORBIDDEN", message: '无权限访问' });
       }
 
       const users = await db.getAllUsersWithStats();
@@ -1600,7 +1623,7 @@ ${allCompetencies.map((c, i) => `${i + 1}. ${c.name} (${c.category}) - ${c.descr
       .query(async ({ ctx, input }) => {
         // 检查管理员权限
         if (ctx.user.role !== 'admin') {
-          throw new Error('无权限访问');
+          throw new TRPCError({ code: "FORBIDDEN", message: '无权限访问' });
         }
 
         const userDetail = await db.getUserDetailForAdmin(input.userId);
@@ -2120,7 +2143,7 @@ ${allCompetencies.map((c, i) => `${i + 1}. ${c.name} (${c.category}) - ${c.descr
         // 获取评估数据
         const assessment = await db.getOrganizationAssessment(ctx.user.id);
         if (!assessment) {
-          throw new Error('评估数据不存在');
+          throw new TRPCError({ code: "NOT_FOUND", message: '评估数据不存在' });
         }
 
         // 获取用户画像
@@ -2467,7 +2490,7 @@ ${profileInfo}
         });
 
         if (!goal) {
-          throw new Error('请先设置能力目标');
+          throw new TRPCError({ code: "BAD_REQUEST", message: '请先设置能力目标' });
         }
 
         // 获取当前能力数据
@@ -2475,7 +2498,7 @@ ${profileInfo}
         if (input.companyId) {
           const analytics = await db.getCompanyCapabilityAnalytics(input.companyId);
           if (!analytics) {
-            throw new Error('无法获取公司能力数据');
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: '无法获取公司能力数据' });
           }
           currentCapabilities = analytics.capabilityDistribution;
         } else {
@@ -2770,7 +2793,7 @@ ${gapSummary}
       .mutation(async ({ ctx, input }) => {
         const database = await db.getDb();
         if (!database) {
-          throw new Error("数据库不可用");
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
         }
 
         await database.insert(feedbacks).values({
@@ -3833,12 +3856,20 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
       // 获取所有职位
       const allPositions = await db.getAllPositions();
       
+      // 一次性查全部职位能力要求，避免 N+1 查询
+      const allPosComps = await db.getAllPositionCompetencies();
+      const posCompMap = new Map<number, typeof allPosComps>();
+      for (const pc of allPosComps) {
+        if (!posCompMap.has(pc.positionId)) posCompMap.set(pc.positionId, []);
+        posCompMap.get(pc.positionId)!.push(pc);
+      }
+      
       // 为每个职位计算匹配度
       const recommendations = [];
       
       for (const position of allPositions) {
-        // 获取职位的能力要求
-        const positionCompetencies = await db.getPositionCompetencies(position.id);
+        // 从预查数据中获取职位能力要求
+        const positionCompetencies = posCompMap.get(position.id) || [];
         
         if (positionCompetencies.length === 0) continue;
         
@@ -4396,8 +4427,7 @@ ${input.userLevel ? `用户当前等级：L${input.userLevel}` : ''}
         return await wikiDb.getAllWikiArticlesWithCategory();
       }),
   }),
-  
-  // Aliases for consistency with routers-d1.ts (plural forms)
+
   industries: router({
     list: publicProcedure.query(async () => {
       const database = await db.getDb();

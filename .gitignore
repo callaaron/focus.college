@@ -108,3 +108,17 @@ temp/
 
 # WorkBuddy agent data (memory, skills, automation)
 .workbuddy/
+
+# Project debris (transient AI-generated reports, test artifacts)
+api-test-results.json
+backup/
+*.report.md
+AUTO_*.md
+FIX_*.md
+SUMMARY_*.md
+COMPLETE_*.md
+FINAL_*.md
+*_STATUS.md
+*_PROGRESS.md
+*_ANALYSIS.md
+*_GUIDE.md

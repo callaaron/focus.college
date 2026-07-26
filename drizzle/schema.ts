@@ -395,39 +395,6 @@ export const companyMembers = mysqlTable("companyMembers", {
 export type CompanyMember = typeof companyMembers.$inferSelect;
 export type InsertCompanyMember = typeof companyMembers.$inferInsert;
 
-// 演示账户表
-export const demoAccounts = mysqlTable("demoAccounts", {
-  id: int("id").autoincrement().primaryKey(),
-  username: varchar("username", { length: 100 }).notNull().unique(), // 用户名
-  password: varchar("password", { length: 255 }).notNull(), // 密码（明文存储，仅用于演示）
-  displayName: varchar("displayName", { length: 100 }).notNull(), // 显示名称
-  role: varchar("role", { length: 50 }).notNull(), // 角色：pm, cto, ceo
-  description: text("description"), // 角色描述
-  userId: int("userId"), // 关联的真实用户ID
-  isActive: boolean("isActive").default(true).notNull(), // 是否激活
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type DemoAccount = typeof demoAccounts.$inferSelect;
-export type InsertDemoAccount = typeof demoAccounts.$inferInsert;
-
-// 演示数据分析表
-export const demoAccountAnalytics = mysqlTable("demoAccountAnalytics", {
-  id: int("id").autoincrement().primaryKey(),
-  demoAccountId: int("demoAccountId").notNull(),
-  sessionId: varchar("sessionId", { length: 100 }).notNull(), // 会话ID
-  loginCount: int("loginCount").default(0), // 登录次数
-  pageViews: int("pageViews").default(0), // 页面访问次数
-  duration: int("duration").default(0), // 停留时长（秒）
-  visitedPages: text("visitedPages"), // 访问的页面（JSON数组）
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type DemoAccountAnalytics = typeof demoAccountAnalytics.$inferSelect;
-export type InsertDemoAccountAnalytics = typeof demoAccountAnalytics.$inferInsert;
-
 // Wiki分类表
 export const wikiCategories = mysqlTable("wikiCategories", {
   id: int("id").autoincrement().primaryKey(),
@@ -497,6 +464,8 @@ export const organizationAssessments = mysqlTable("organizationAssessments", {
   organizationScore: int("organizationScore").default(0).notNull(), // 组织能力 0-100
   innovationScore: int("innovationScore").default(0).notNull(), // 创新能力 0-100
   detailedScores: text("detailedScores"), // 详细评分数据 (JSON)
+  aiAnalysis: text("aiAnalysis"), // AI 分析结果
+  aiSuggestions: text("aiSuggestions"), // AI 建议
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

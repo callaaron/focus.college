@@ -55,8 +55,7 @@ export function calculateWeightedScore(scores: ScoreComponents): {
     evidence: Math.round(evidenceScore * SCORE_WEIGHTS.evidence * 10) / 10,
   };
 
-  // 根据分数确定等级：>=80=L4(精通), >=60=L3(发展中), >=40=L2(入门), >=20=L1(初学), <20=L1
-  const level = finalScore >= 80 ? 4 : finalScore >= 60 ? 3 : finalScore >= 40 ? 2 : 1;
+  const level = determineLevel(finalScore);
 
   return {
     finalScore,
@@ -66,13 +65,15 @@ export function calculateWeightedScore(scores: ScoreComponents): {
 }
 
 /**
- * 根据分数确定能力等级
+ * 根据分数确定能力等级（5级制，与 DB levelStandards 对齐）
+ * L1: 0-20, L2: 21-40, L3: 41-60, L4: 61-80, L5: 81-100
  * @param finalScore 最终得分（0-100）
  * @returns 能力等级（1-5）
  */
 export function determineLevel(finalScore: number): number {
-  if (finalScore >= 80) return 4;
-  if (finalScore >= 60) return 3;
-  if (finalScore >= 40) return 2;
-  return 1;
+  if (finalScore <= 20) return 1;
+  if (finalScore <= 40) return 2;
+  if (finalScore <= 60) return 3;
+  if (finalScore <= 80) return 4;
+  return 5;
 }

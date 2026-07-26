@@ -18,146 +18,31 @@ import PageContainer from "@/components/PageContainer";
 export default function Achievements() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
-  // Fetch user's achievements
-  const { data: achievementsData, isLoading } = trpc.achievements.getUserAchievements.useQuery();
+  // Fetch challenge achievements (with unlock status) from API
+  const { data: allAchievements, isLoading } = trpc.challenges.getAchievements.useQuery();
   
   // Fetch challenges stats for progress calculation
   const { data: stats } = trpc.challenges.getStats.useQuery();
 
-  // Mock achievements data (will be replaced with real data from API)
-  const allAchievements = [
-    {
-      id: 1,
-      code: 'first_challenge',
-      name: '初试身手',
-      description: '完成第1个挑战',
-      icon: '🎯',
-      category: 'count' as const,
-      requirement: 1,
-      points: 10,
-      rarity: 'common' as const,
-    },
-    {
-      id: 2,
-      code: 'challenge_10',
-      name: '小试牛刀',
-      description: '完成10个挑战',
-      icon: '⭐',
-      category: 'count' as const,
-      requirement: 10,
-      points: 50,
-      rarity: 'common' as const,
-    },
-    {
-      id: 3,
-      code: 'challenge_50',
-      name: '经验丰富',
-      description: '完成50个挑战',
-      icon: '💪',
-      category: 'count' as const,
-      requirement: 50,
-      points: 200,
-      rarity: 'rare' as const,
-    },
-    {
-      id: 4,
-      code: 'challenge_100',
-      name: '管理专家',
-      description: '完成100个挑战',
-      icon: '👑',
-      category: 'count' as const,
-      requirement: 100,
-      points: 500,
-      rarity: 'epic' as const,
-    },
-    {
-      id: 5,
-      code: 'streak_3',
-      name: '持之以恒',
-      description: '连续3天完成挑战',
-      icon: '🔥',
-      category: 'streak' as const,
-      requirement: 3,
-      points: 30,
-      rarity: 'common' as const,
-    },
-    {
-      id: 6,
-      code: 'streak_7',
-      name: '七日精进',
-      description: '连续7天完成挑战',
-      icon: '🌟',
-      category: 'streak' as const,
-      requirement: 7,
-      points: 100,
-      rarity: 'rare' as const,
-    },
-    {
-      id: 7,
-      code: 'streak_30',
-      name: '月度坚持',
-      description: '连续30天完成挑战',
-      icon: '🏅',
-      category: 'streak' as const,
-      requirement: 30,
-      points: 500,
-      rarity: 'epic' as const,
-    },
-    {
-      id: 8,
-      code: 'perfect_10',
-      name: '完美十连',
-      description: '连续10题全对',
-      icon: '💯',
-      category: 'accuracy' as const,
-      requirement: 10,
-      points: 200,
-      rarity: 'rare' as const,
-    },
-    {
-      id: 9,
-      code: 'all_categories',
-      name: '全能选手',
-      description: '每个类别至少完成5题',
-      icon: '🎓',
-      category: 'special' as const,
-      requirement: 8,
-      points: 300,
-      rarity: 'epic' as const,
-    },
-    {
-      id: 10,
-      code: 'speed_master',
-      name: '极速答题',
-      description: '10秒内答对困难题',
-      icon: '⚡',
-      category: 'special' as const,
-      requirement: 1,
-      points: 100,
-      rarity: 'rare' as const,
-    },
-  ];
-
-  // Calculate achievement progress based on stats
-  const achievementsWithStatus = allAchievements.map(achievement => {
-    let unlocked = false;
+  // 基于统计数据计算进度（用于未解锁成就的进度条展示）
+  const achievementsWithStatus = (allAchievements || []).map(achievement => {
     let progress = 0;
 
     if (stats) {
       if (achievement.category === 'count') {
-        progress = Math.min(100, (stats.totalChallenges / achievement.requirement) * 100);
-        unlocked = stats.totalChallenges >= achievement.requirement;
+        progress = Math.min(100, Math.round((stats.totalChallenges / achievement.requirement) * 100));
       } else if (achievement.category === 'streak') {
-        progress = Math.min(100, (stats.currentStreak / achievement.requirement) * 100);
-        unlocked = stats.currentStreak >= achievement.requirement;
+        progress = Math.min(100, Math.round((stats.currentStreak / achievement.requirement) * 100));
+      } else if (achievement.category === 'accuracy' && stats.totalChallenges > 0) {
+        const accuracy = Math.round((stats.correctCount / stats.totalChallenges) * 100);
+        progress = Math.min(100, Math.round((accuracy / achievement.requirement) * 100));
       }
     }
 
+    // unlocked 和 unlockedAt 直接使用 API 返回的值（来自 DB userChallengeAchievements）
     return {
       ...achievement,
-      unlocked,
       progress,
-      unlockedAt: unlocked ? new Date().toISOString() : null,
     };
   });
 

@@ -6,8 +6,9 @@ import {
   scenarios, InsertScenario, assessmentSessions, InsertAssessmentSession,
   userAnswers, InsertUserAnswer, industries, positions, industryCompetencies,
   positionCompetencies, learningResources, companies, InsertCompany,
-  companyMembers, InsertCompanyMember, demoAccounts, demoAccountAnalytics,
-  wikiCategories, wikiArticles, feedbacks, changelogs
+  companyMembers, InsertCompanyMember,
+  organizationAssessments,
+  wikiCategories, wikiArticles, feedbacks
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -227,17 +228,27 @@ export async function upsertUserCompetency(data: InsertCompetencyScore) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
-  // Auto-calculate finalScore if not provided or if any component score changed
-  const finalScore = calculateFinalScore(data);
+  const existing = await getUserCompetency(data.userId, data.competencyId);
+  
+  // 合并模式：未传入的分数字段保留已有值，避免覆盖为 0
+  const mergedData = existing ? {
+    ...data,
+    questionnaireScore: data.questionnaireScore ?? existing.questionnaireScore,
+    aiAnalysisScore: data.aiAnalysisScore ?? existing.aiAnalysisScore,
+    selfAssessmentScore: data.selfAssessmentScore ?? existing.selfAssessmentScore,
+    evidenceScore: data.evidenceScore ?? existing.evidenceScore,
+    practiceCount: data.practiceCount ?? existing.practiceCount,
+  } : data;
+  
+  // 自动计算 finalScore 和 level
+  const finalScore = calculateFinalScore(mergedData);
   const level = calculateLevel(finalScore);
   
   const updatedData = {
-    ...data,
+    ...mergedData,
     finalScore,
     level
   };
-  
-  const existing = await getUserCompetency(data.userId, data.competencyId);
   
   if (existing) {
     await db.update(competencyScores)
@@ -382,6 +393,13 @@ export async function getPositionCompetencies(positionId: number) {
   const db = await getDb();
   if (!db) return [];
   return await db.select().from(positionCompetencies).where(eq(positionCompetencies.positionId, positionId));
+}
+
+// 批量获取所有职位能力要求（避免 N+1 查询）
+export async function getAllPositionCompetencies() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(positionCompetencies);
 }
 
 export async function getIndustryCompetencies(industryId: number) {
@@ -763,10 +781,163 @@ export async function getOrganizationAssessmentHistory(userId: number, limit: nu
   
   return results;
 }
-export async function updateOrganizationAnalysis(userId: number, analysis: string) { }
-export async function getCompanyCapabilityAnalytics(companyId: number) { return null; }
-export async function getCompanyMembersCapabilityComparison(companyId: number) { return []; }
-export async function getCompanyCapabilityTrends(companyId: number, months: number) { return []; }
+
+// ==================== Organization / Company Analytics ====================
+
+// 保存 AI 企业能力分析结果（持久化，不再刷新即丢）
+export async function updateOrganizationAnalysis(assessmentId: number, aiAnalysis: string, aiSuggestions: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(organizationAssessments)
+    .set({ aiAnalysis, aiSuggestions })
+    .where(eq(organizationAssessments.id, assessmentId));
+}
+
+// 公司能力分析：聚合所有成员的 8 域平均分 + 强弱项
+export async function getCompanyCapabilityAnalytics(companyId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const members = await db.select().from(companyMembers)
+    .where(eq(companyMembers.companyId, companyId));
+  if (members.length === 0) return null;
+
+  const userIds = members.map(m => m.userId);
+
+  // 一次查全部成员的能力分数 + 能力信息
+  const allScores = await db.select({
+    userId: competencyScores.userId,
+    finalScore: competencyScores.finalScore,
+    category: competencies.category,
+  })
+    .from(competencyScores)
+    .innerJoin(competencies, eq(competencyScores.competencyId, competencies.id))
+    .where(inArray(competencyScores.userId, userIds));
+
+  // 按域聚合
+  const domainMap = new Map<string, number[]>();
+  for (const s of allScores) {
+    const cat = s.category || '未分类';
+    if (!domainMap.has(cat)) domainMap.set(cat, []);
+    domainMap.get(cat)!.push(s.finalScore || 0);
+  }
+
+  const domains = Array.from(domainMap.entries()).map(([category, scores]) => ({
+    category,
+    avgScore: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+    memberCount: members.length,
+  }));
+
+  const sorted = [...domains].sort((a, b) => b.avgScore - a.avgScore);
+  const avgScore = domains.length > 0
+    ? Math.round(domains.reduce((a, b) => a + b.avgScore, 0) / domains.length)
+    : 0;
+
+  return {
+    domains,
+    strengths: sorted.slice(0, 3),
+    weaknesses: sorted.slice(-3).reverse(),
+    totalMembers: members.length,
+    avgScore,
+  };
+}
+
+// 公司成员能力对比
+export async function getCompanyMembersCapabilityComparison(companyId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const members = await db.select().from(companyMembers)
+    .where(eq(companyMembers.companyId, companyId));
+  if (members.length === 0) return [];
+
+  const userIds = members.map(m => m.userId);
+
+  // 一次查全部成员的能力分数
+  const allScores = await db.select({
+    userId: competencyScores.userId,
+    finalScore: competencyScores.finalScore,
+    category: competencies.category,
+  })
+    .from(competencyScores)
+    .innerJoin(competencies, eq(competencyScores.competencyId, competencies.id))
+    .where(inArray(competencyScores.userId, userIds));
+
+  // 一次查全部用户信息
+  const userInfo = await db.select({ id: users.id, name: users.name })
+    .from(users)
+    .where(inArray(users.id, userIds));
+
+  // 按成员聚合
+  return members.map(member => {
+    const user = userInfo.find(u => u.id === member.userId);
+    const memberScores = allScores.filter(s => s.userId === member.userId);
+    const avgScore = memberScores.length > 0
+      ? Math.round(memberScores.reduce((a, b) => a + (b.finalScore || 0), 0) / memberScores.length)
+      : 0;
+
+    // 按域分组找最强/最弱
+    const domainMap = new Map<string, number[]>();
+    for (const s of memberScores) {
+      const cat = s.category || '未分类';
+      if (!domainMap.has(cat)) domainMap.set(cat, []);
+      domainMap.get(cat)!.push(s.finalScore || 0);
+    }
+    const domainAvgs = Array.from(domainMap.entries())
+      .map(([cat, scores]) => ({ category: cat, avg: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) }))
+      .sort((a, b) => b.avg - a.avg);
+
+    return {
+      userId: member.userId,
+      name: user?.name || `用户${member.userId}`,
+      role: member.role,
+      position: member.position,
+      avgScore,
+      level: avgScore >= 81 ? 5 : avgScore >= 61 ? 4 : avgScore >= 41 ? 3 : avgScore >= 21 ? 2 : 1,
+      topDomain: domainAvgs[0]?.category || '—',
+      weakDomain: domainAvgs[domainAvgs.length - 1]?.category || '—',
+      competencyCount: memberScores.length,
+    };
+  });
+}
+
+// 公司能力成长趋势（按月聚合所有成员快照）
+export async function getCompanyCapabilityTrends(companyId: number, months: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const members = await db.select().from(companyMembers)
+    .where(eq(companyMembers.companyId, companyId));
+  if (members.length === 0) return [];
+
+  const userIds = members.map(m => m.userId);
+  const startDate = new Date();
+  startDate.setMonth(startDate.getMonth() - months);
+
+  const snapshots = await db.select()
+    .from(competencySnapshots)
+    .where(and(
+      inArray(competencySnapshots.userId, userIds),
+      gte(competencySnapshots.snapshotDate, startDate)
+    ))
+    .orderBy(competencySnapshots.snapshotDate);
+
+  // 按月聚合
+  const monthlyMap = new Map<string, number[]>();
+  for (const s of snapshots) {
+    const monthKey = new Date(s.snapshotDate).toISOString().substring(0, 7);
+    if (!monthlyMap.has(monthKey)) monthlyMap.set(monthKey, []);
+    monthlyMap.get(monthKey)!.push(s.score);
+  }
+
+  return Array.from(monthlyMap.entries()).map(([month, scores]) => ({
+    snapshotDate: month,
+    avgScore: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+    memberCount: members.length,
+  })).sort((a, b) => a.snapshotDate.localeCompare(b.snapshotDate));
+}
+
+// 能力目标（暂保持空壳，需新建 capabilityGoals 表）
 export async function upsertCapabilityGoal(data: any) { return 1; }
 export async function getCapabilityGoal(data: any) { return null; }
 export async function createCapabilityGapAnalysis(data: any) { return 1; }

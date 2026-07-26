@@ -6,7 +6,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb } from "../db";
+import { getDb, upsertUserCompetency, getUserCompetency } from "../db";
 import { 
   challenges, 
   userChallenges, 
@@ -180,6 +180,20 @@ export const challengesRouter = router({
       // 更新用户积分
       await updateUserPoints(database, userId, isCorrect, pointsEarned);
 
+      // 答对挑战 → 提升对应能力的 evidenceScore（打通挑战→能力分闭环）
+      if (isCorrect && challengeData.competencyId) {
+        const existingComp = await getUserCompetency(userId, challengeData.competencyId);
+        const currentEvidenceScore = existingComp?.evidenceScore || 0;
+        const newEvidenceScore = Math.min(100, currentEvidenceScore + 3);
+        await upsertUserCompetency({
+          userId,
+          competencyId: challengeData.competencyId,
+          evidenceScore: newEvidenceScore,
+          practiceCount: (existingComp?.practiceCount || 0) + 1,
+          lastPracticeAt: new Date(),
+        });
+      }
+
       return {
         isCorrect,
         pointsEarned,
@@ -295,6 +309,40 @@ export const challengesRouter = router({
       // 注意：这里需要join users表，暂时返回userId
       return leaderboard;
     }),
+
+  /**
+   * 获取挑战成就列表（含用户解锁状态）
+   */
+  getAchievements: protectedProcedure.query(async ({ ctx }) => {
+    const database = await getDb();
+    if (!database) {
+      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+    }
+
+    const userId = ctx.user!.id;
+
+    // 一次查全部成就定义
+    const allAchievements = await database
+      .select()
+      .from(challengeAchievements)
+      .orderBy(challengeAchievements.id);
+
+    // 一次查当前用户的解锁记录
+    const userAchs = await database
+      .select()
+      .from(userChallengeAchievements)
+      .where(eq(userChallengeAchievements.userId, userId));
+
+    // 合并：附加 unlocked + unlockedAt
+    return allAchievements.map(ach => {
+      const unlocked = userAchs.find(ua => ua.achievementId === ach.id);
+      return {
+        ...ach,
+        unlocked: !!unlocked,
+        unlockedAt: unlocked?.unlockedAt || null,
+      };
+    });
+  }),
 });
 
 /**
